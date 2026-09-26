@@ -56,7 +56,7 @@ export default function ClientPage({ params }: { params: { id: string } }) {
     const received = setts.reduce((s, x) => s + Number(x.amount), 0);
     const loan = moves.reduce((s, x) => s + MOVE_SIGN[x.type] * Number(x.amount), 0);
     const yours = profit - clientShare;
-    return { profit, clientShare, yours, received, balance: yours - received, loan, open: plays.filter(p => p.status === "open").length };
+    return { profit, clientShare, yours, received, balance: yours - received, loan, outstanding: loan + yours - received, open: plays.filter(p => p.status === "open").length };
   }, [plays, setts, moves]);
 
   if (err) return <div className="banner" style={{ color: "var(--neg)" }}>{err}</div>;
@@ -95,7 +95,8 @@ export default function ClientPage({ params }: { params: { id: string } }) {
         <Kpi label="Your share" value={money(stats.yours)} />
         <Kpi label="Received" value={money(stats.received)} />
         <Kpi label="Open plays" value={String(stats.open)} />
-        <Kpi label="Loan outstanding" value={money(stats.loan)} />
+        <Kpi label="Loan" value={money(stats.loan)} />
+        <Kpi label="Outstanding" value={money(stats.outstanding)} />
       </div>
 
       <div className="tab-bar" style={{ alignSelf: "flex-start" }}>

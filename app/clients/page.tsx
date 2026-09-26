@@ -3,8 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Client, ClientSummary, fetchAll, getDb, money0, pct, tone } from "@/lib/db";
 
-type Row = Client & ClientSummary & { balance: number };
-type SortKey = "status" | "name" | "state" | "split" | "open_plays" | "settled_plays" | "profit" | "your_share" | "received" | "balance" | "loan_outstanding" | "last_play";
+type Row = Client & ClientSummary & { balance: number; outstanding: number };
+type SortKey = "status" | "outstanding" | "name" | "state" | "split" | "open_plays" | "settled_plays" | "profit" | "your_share" | "received" | "balance" | "loan_outstanding" | "last_play";
 type Filter = "active" | "open" | "loan" | "all";
 
 const COLS: { key: SortKey; label: string; right?: boolean }[] = [
@@ -17,7 +17,8 @@ const COLS: { key: SortKey; label: string; right?: boolean }[] = [
   { key: "profit", label: "Profit", right: true },
   { key: "your_share", label: "Your share", right: true },
   { key: "received", label: "Received", right: true },
-  { key: "loan_outstanding", label: "Loan out", right: true },
+  { key: "loan_outstanding", label: "Loan", right: true },
+  { key: "outstanding", label: "Outstanding", right: true },
   { key: "last_play", label: "Last play", right: true },
 ];
 
@@ -27,7 +28,7 @@ export default function ClientsPage() {
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("active");
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "last_play", dir: -1 });
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "outstanding", dir: -1 });
   const [adding, setAdding] = useState(false);
 
   const load = async () => {
@@ -41,7 +42,9 @@ export default function ClientsPage() {
       setRows(clients.map(c => {
         const s = byId.get(c.id) || ({ open_plays: 0, settled_plays: 0, profit: 0, client_share: 0, your_share: 0, received: 0, loan_outstanding: 0, last_play: null } as any);
         const n = (x: any) => Number(x) || 0;
-        return { ...c, ...s, profit: n(s.profit), client_share: n(s.client_share), your_share: n(s.your_share), received: n(s.received), loan_outstanding: n(s.loan_outstanding), open_plays: n(s.open_plays), settled_plays: n(s.settled_plays), balance: n(s.your_share) - n(s.received) };
+        return { ...c, ...s, profit: n(s.profit), client_share: n(s.client_share), your_share: n(s.your_share), received: n(s.received), loan_outstanding: n(s.loan_outstanding), open_plays: n(s.open_plays), settled_plays: n(s.settled_plays), balance: n(s.your_share) - n(s.received),
+          // What the client has out with you: loan fronted + your share they haven't sent yet (sheet: Total Loan + column AN)
+          outstanding: n(s.loan_outstanding) + n(s.your_share) - n(s.received) };
       }));
     } catch (e: any) {
       const m = e?.message || String(e);
@@ -58,7 +61,7 @@ export default function ClientsPage() {
     let r = rows.filter(c => !needle || c.name.toLowerCase().includes(needle) || (c.state || "").toLowerCase() === needle);
     if (filter === "active") r = r.filter(c => c.status === "active");
     if (filter === "open") r = r.filter(c => c.open_plays > 0);
-    if (filter === "loan") r = r.filter(c => Math.abs(c.loan_outstanding) > 0.5);
+    if (filter === "loan") r = r.filter(c => c.outstanding > 0.5);
     const { key, dir } = sort;
     return [...r].sort((a, b) => {
       const x = (a as any)[key], y = (b as any)[key];
@@ -85,7 +88,8 @@ export default function ClientsPage() {
   const totals = useMemo(() => view.reduce((t, c) => ({
     profit: t.profit + c.profit, yours: t.yours + c.your_share, received: t.received + c.received,
     loan: t.loan + c.loan_outstanding, open: t.open + c.open_plays,
-  }), { profit: 0, yours: 0, received: 0, loan: 0, open: 0 }), [view]);
+    outstanding: t.outstanding + Math.max(0, c.outstanding),
+  }), { profit: 0, yours: 0, received: 0, loan: 0, open: 0, outstanding: 0 }), [view]);
 
   if (err) return <div className="banner" style={{ color: "var(--neg)" }}>{err}</div>;
   if (!rows) return <div style={{ color: "var(--muted)", padding: 24 }}>Loading clients…</div>;
@@ -102,7 +106,7 @@ export default function ClientsPage() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <input className="input" placeholder="Search name or state" value={q} onChange={e => setQ(e.target.value)} style={{ width: 220 }} />
           <div className="tab-bar">
-            {([["active", "Active"], ["open", "Open plays"], ["loan", "Loan out"], ["all", "All"]] as const).map(([k, l]) => (
+            {([["active", "Active"], ["open", "Open plays"], ["loan", "Owes you"], ["all", "All"]] as const).map(([k, l]) => (
               <button key={k} className={`tab${filter === k ? " active" : ""}`} onClick={() => setFilter(k)}>{l}</button>
             ))}
           </div>
@@ -116,7 +120,7 @@ export default function ClientsPage() {
         <Kpi label="Profit" value={money0(totals.profit)} />
         <Kpi label="Your share" value={money0(totals.yours)} />
         <Kpi label="Received" value={money0(totals.received)} />
-        <Kpi label="Loan outstanding" value={money0(totals.loan)} />
+        <Kpi label="Total outstanding" value={money0(totals.outstanding)} />
         <Kpi label="Open plays" value={String(totals.open)} />
       </div>
 
@@ -158,7 +162,8 @@ export default function ClientsPage() {
                   <td className="r" style={{ color: tone(c.profit) }}>{money0(c.profit)}</td>
                   <td className="r">{money0(c.your_share)}</td>
                   <td className="r" style={{ color: "var(--text-2)" }}>{money0(c.received)}</td>
-                  <td className="r" style={{ color: Math.abs(c.loan_outstanding) > 0.5 ? "var(--text)" : "var(--muted)" }}>{money0(c.loan_outstanding)}</td>
+                  <td className="r" style={{ color: Math.abs(c.loan_outstanding) > 0.5 ? "var(--text-2)" : "var(--muted)" }}>{money0(c.loan_outstanding)}</td>
+                  <td className="r" style={{ fontWeight: 500, color: c.outstanding > 0.5 ? "var(--text)" : "var(--muted)" }}>{money0(c.outstanding)}</td>
                   <td className="r" style={{ color: "var(--text-2)" }}>{c.last_play || "—"}</td>
                 </tr>
               ))}
