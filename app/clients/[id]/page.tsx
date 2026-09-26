@@ -7,6 +7,7 @@ import {
 } from "@/lib/db";
 import { BOOKS } from "@/lib/constants";
 import Onboarding from "@/components/Onboarding";
+import { settlePlay, syncSelfHedgeReturns } from "@/lib/settle";
 
 const ALL_BOOKS = [...BOOKS, "theScore Bet", "ESPN Bet"];
 
@@ -182,30 +183,6 @@ function EditClient({ client, onSaved }: { client: Client; onSaved: () => void }
 }
 
 
-/**
- * Self hedge loan math: the stake went on the loan when the bet was placed.
- * If your self hedge wins, the whole payout comes off the loan; if it loses, the loan stays.
- * A void refunds the stake. Only applies to plays whose self hedge was logged here
- * (imported plays already have their loan baked into the opening balance).
- */
-async function syncSelfHedgeReturns(db: any, play: Play, legs: Leg[], results: Record<string, Leg["result"]> | null) {
-  const { data: stakes } = await db.from("capital_movements").select("id").eq("play_id", play.id).eq("type", "self_hedge_stake");
-  if (!stakes || stakes.length === 0) return;
-  await db.from("capital_movements").delete().eq("play_id", play.id).eq("type", "self_hedge_return");
-  if (!results) return;
-  const rows = legs.filter(l => l.self_hedge).flatMap(l => {
-    const r = results[l.id];
-    const amount = r === "won" ? Number(l.payout) : r === "void" ? Number(l.cash_stake) : 0;
-    return amount > 0 ? [{
-      client_id: play.client_id, play_id: play.id, type: "self_hedge_return", amount: Math.round(amount * 100) / 100,
-      date: today(), notes: `${l.book || "Self hedge"} ${r === "won" ? "won" : "voided"}${l.selection ? `: ${l.selection}` : ""}`,
-    }] : [];
-  });
-  if (rows.length) {
-    const { error } = await db.from("capital_movements").insert(rows);
-    if (error) throw error;
-  }
-}
 
 // ─── Plays ─────────────────────────────────────────────────────
 function Plays({ client, plays, legsBy, reload }: { client: Client; plays: Play[]; legsBy: Map<string, Leg[]>; reload: () => void }) {
@@ -301,21 +278,7 @@ function PlayDetail({ play, legs, client, reload }: { play: Play; legs: Leg[]; c
     setBusy(true); setErr(null);
     try {
       const db = await getDb();
-      const results: Record<string, Leg["result"]> = {};
-      for (const l of legs) {
-        const w = winners[l.seq];
-        const result = w === "void" ? "void" : l.side === w ? "won" : "lost";
-        results[l.id] = result;
-        if (result !== l.result) {
-          const { error } = await db.from("legs").update({ result }).eq("id", l.id);
-          if (error) throw error;
-        }
-      }
-      const patch: any = { status: "settled", settled_on: play.settled_on || today() };
-      if (legs.length === 0) patch.profit_override = parseFloat(profitManual) || 0;
-      const { error } = await db.from("plays").update(patch).eq("id", play.id);
-      if (error) throw error;
-      await syncSelfHedgeReturns(db, play, legs, results);
+      await settlePlay(db, play, legs, winners, legs.length === 0 ? parseFloat(profitManual) || 0 : null);
       reload();
     } catch (e: any) { setErr(e?.message || "Could not settle."); }
     setBusy(false);
@@ -326,6 +289,7 @@ function PlayDetail({ play, legs, client, reload }: { play: Play; legs: Leg[]; c
     const db = await getDb();
     if (status === "open") await db.from("legs").update({ result: "pending" }).eq("play_id", play.id);
     await db.from("plays").update({ status, settled_on: null }).eq("id", play.id);
+    try { await db.from("plays").update({ withdrawal: null, withdrawal_amount: null }).eq("id", play.id); } catch {}
     // Reopen: undo any self-hedge payout; void: refund the self-hedge stake.
     const voided: Record<string, Leg["result"]> = {};
     legs.forEach(l => { voided[l.id] = "void"; });

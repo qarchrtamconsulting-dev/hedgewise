@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { getDb } from "@/lib/db";
 
 const LINKS = [
+  { href: "/", label: "Today" },
   { href: "/tools", label: "Tools" },
   { href: "/clients", label: "Clients" },
   { href: "/import", label: "Import" },
@@ -72,7 +73,7 @@ export default function TopBar() {
       </Link>
       <nav className="nav">
         {LINKS.map(l => (
-          <Link key={l.href} href={l.href} className={`nav-link${path.startsWith(l.href) ? " active" : ""}`}>
+          <Link key={l.href} href={l.href} className={`nav-link${(l.href === "/" ? path === "/" : path.startsWith(l.href)) ? " active" : ""}`}>
             {l.label}
           </Link>
         ))}

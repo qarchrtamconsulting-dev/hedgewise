@@ -66,6 +66,9 @@ export interface Play {
   loan_amount: number | null;
   notes: string | null;
   legacy_row: number | null;
+  withdrawal?: "pending" | "requested" | "received" | "skipped" | null;
+  withdrawal_amount?: number | null;
+  withdrawal_updated_at?: string | null;
   profit?: number;
   client_share?: number;
 }
@@ -112,7 +115,9 @@ export const money = (n: number | null | undefined) => usd.format(Number(n) || 0
 export const money0 = (n: number | null | undefined) => usd0.format(Number(n) || 0);
 export const pct = (n: number | null | undefined) => `${Math.round((Number(n) || 0) * 1000) / 10}%`;
 export const tone = (n: number) => (n > 0.005 ? "var(--pos)" : n < -0.005 ? "var(--neg)" : "var(--text-2)");
-export const today = () => new Date().toISOString().slice(0, 10);
+export const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+/** Local wall-clock time without a timezone, matching how game times are stored. */
+export const localIso = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19);
 
 /** Same formula as the database view and the AS6 sheet. */
 export function playProfit(play: Play, legs: Leg[]) {

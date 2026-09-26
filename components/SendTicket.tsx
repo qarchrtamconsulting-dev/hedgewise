@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FinderGame } from "./useGameFinder";
 import { fmt } from "@/lib/constants";
 import { copyText } from "@/lib/clipboard";
-import { getDb } from "@/lib/db";
+import { getDb, localIso } from "@/lib/db";
 
 export interface Ticket {
   /** Promo type logged to the client's sheet, e.g. "Free Bet" */
@@ -115,7 +115,7 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
         notes: `${game.away} at ${game.home}`,
       }).select("id").single();
       if (error) throw error;
-      const event_time = game.commence ? new Date(game.commence).toISOString() : null;
+      const event_time = game.commence ? localIso(new Date(game.commence)) : null;
       const hedgeLeg = (cash: number, self: boolean) => ({
         play_id: play!.id, seq: 1, side: "hedge", book: game.hedgeBookName, self_hedge: self,
         selection: game.hedgeTeam, odds: game.hedgeAmerican,

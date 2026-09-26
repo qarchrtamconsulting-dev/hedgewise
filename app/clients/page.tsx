@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Client, ClientSummary, fetchAll, getDb, money0, pct, tone } from "@/lib/db";
+import { Client, ClientSummary, fetchAll, getDb, money, money0, pct, tone } from "@/lib/db";
 import { Stage, nextOffer } from "@/lib/playbook";
 
 type Row = Client & ClientSummary & { balance: number; outstanding: number; next_app: string | null };
@@ -131,7 +131,7 @@ export default function ClientsPage() {
         <Kpi label="Profit" value={money0(totals.profit)} />
         <Kpi label="Your share" value={money0(totals.yours)} />
         <Kpi label="Received" value={money0(totals.received)} />
-        <Kpi label="Total outstanding" value={money0(totals.outstanding)} />
+        <Kpi label="Total outstanding" value={money(totals.outstanding)} />
         <Kpi label="Open plays" value={String(totals.open)} />
       </div>
 
@@ -173,8 +173,8 @@ export default function ClientsPage() {
                   <td className="r" style={{ color: tone(c.profit) }}>{money0(c.profit)}</td>
                   <td className="r">{money0(c.your_share)}</td>
                   <td className="r" style={{ color: "var(--text-2)" }}>{money0(c.received)}</td>
-                  <td className="r" style={{ color: Math.abs(c.loan_outstanding) > 0.5 ? "var(--text-2)" : "var(--muted)" }}>{money0(c.loan_outstanding)}</td>
-                  <td className="r" style={{ fontWeight: 500, color: c.outstanding > 0.5 ? "var(--text)" : "var(--muted)" }}>{money0(c.outstanding)}</td>
+                  <td className="r" style={{ color: Math.abs(c.loan_outstanding) > 0.5 ? "var(--text-2)" : "var(--muted)" }}>{money(c.loan_outstanding)}</td>
+                  <td className="r" style={{ fontWeight: 500, color: c.outstanding > 0.5 ? "var(--text)" : "var(--muted)" }}>{money(c.outstanding)}</td>
                   <td style={{ color: c.next_app ? "var(--text-2)" : "var(--muted)" }}>{c.next_app || "—"}</td>
                   <td className="r" style={{ color: "var(--text-2)" }}>{c.last_play || "—"}</td>
                 </tr>
