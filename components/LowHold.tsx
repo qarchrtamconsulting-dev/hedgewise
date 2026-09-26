@@ -22,7 +22,6 @@ export default function LowHoldFinder() {
   return (
     <FinderShell
       title="Low Hold Finder"
-      accent="#ffd60a"
       config={config}
       setConfig={setConfig}
       games={finder.games}
@@ -34,19 +33,22 @@ export default function LowHoldFinder() {
       onFetch={() => finder.fetchGames(config)}
       inputs={
         <div className="card">
-          <span className="label">Cash Bet Size (per side) *</span>
+          <span className="label">Fixed book stake</span>
           <USDInput value={cashSize} set={setCashSize} placeholder="100.00" />
-          <div style={{ color: "#444", fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
-            Bet $X on each side to clear wagering at minimum hold cost. Lower hold = lower qualifying loss.
+          <div className="hint">
+            Hedge is sized so both outcomes pay the same. Lower hold means a smaller qualifying loss.
           </div>
         </div>
       }
       renderGame={(g) => {
-        // Low hold: bet equal cash on each side
-        const fixedNet = cash * (g.fixedDecimal - 1) - cash;
-        const hedgeNet = cash * (g.hedgeDecimal - 1) - cash;
-        const qualLoss = Math.min(fixedNet, hedgeNet);
-        const totalWagered = cash * 2;
+        // Low hold: fixed-book stake is the input; hedge is sized so both outcomes pay the same.
+        const stake = cash || 0;
+        const hedgeStake = (stake * g.fixedDecimal) / g.hedgeDecimal;
+        const fixedNet = stake * (g.fixedDecimal - 1) - hedgeStake;
+        const hedgeNet = hedgeStake * (g.hedgeDecimal - 1) - stake;
+        const totalWagered = stake + hedgeStake;
+        const signed = (n: number) => `${n >= 0 ? "+" : "-"}${fmt(n)}`;
+        const tone = (n: number) => (n >= 0 ? "var(--pos)" : "var(--neg)");
 
         return (
           <GameCard
@@ -54,11 +56,11 @@ export default function LowHoldFinder() {
             game={g}
             fixedBookName={config.fixedBook}
             stats={[
-              { label: "Each Side", value: fmt(cash || 0) },
-              { label: "Total Wagered", value: fmt(totalWagered) },
-              { label: "Qual Loss", value: `${qualLoss >= 0 ? "+" : "-"}${fmt(qualLoss)}`, color: qualLoss >= 0 ? "#39ff14" : "#ff9800" },
-              { label: "If Fixed Wins", value: `${fixedNet >= 0 ? "+" : "-"}${fmt(fixedNet)}`, color: fixedNet >= 0 ? "#39ff14" : "#ff4444" },
-              { label: "If Hedge Wins", value: `${hedgeNet >= 0 ? "+" : "-"}${fmt(hedgeNet)}`, color: hedgeNet >= 0 ? "#39ff14" : "#ff4444" },
+              { label: `${config.fixedBook || "Fixed"} stake`, value: fmt(stake) },
+              { label: "Hedge stake", value: fmt(hedgeStake) },
+              { label: "Total wagered", value: fmt(totalWagered) },
+              { label: "If fixed wins", value: signed(fixedNet), color: tone(fixedNet) },
+              { label: "If hedge wins", value: signed(hedgeNet), color: tone(hedgeNet) },
             ]}
             showHold={true}
           />

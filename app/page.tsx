@@ -1,25 +1,22 @@
 import Link from "next/link";
 
+const SECTIONS = [
+  { href: "/tools", title: "Tools", body: "Low hold, free bet, risk free and profit boost finders with live odds." },
+  { href: "/clients", title: "Clients", body: "Roster, promo tracking, grading and payment splits." },
+];
+
 export default function Home() {
   return (
-    <div style={{ padding: "40px 0" }}>
-      <h1 style={{ fontSize: 32, fontWeight: 800, letterSpacing: 2, marginBottom: 8 }}>HEDGEWISE</h1>
-      <p style={{ color: "#888", fontSize: 14, marginBottom: 32 }}>Promo arbitrage command center</p>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, maxWidth: 700 }} className="grid-2col">
-        <Link href="/tools">
-          <div className="card" style={{ cursor: "pointer", borderColor: "#00e5ff44", padding: 24 }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🛠</div>
-            <div style={{ color: "#00e5ff", fontWeight: 800, letterSpacing: 2, fontSize: 12, marginBottom: 8 }}>TOOLS</div>
-            <div style={{ color: "#fff", fontSize: 14, lineHeight: 1.5 }}>Free Bet, Risk Free, Profit Boost, Low Hold finder</div>
-          </div>
-        </Link>
-        <Link href="/clients">
-          <div className="card" style={{ cursor: "pointer", borderColor: "#b388ff44", padding: 24 }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>👥</div>
-            <div style={{ color: "#b388ff", fontWeight: 800, letterSpacing: 2, fontSize: 12, marginBottom: 8 }}>CLIENTS</div>
-            <div style={{ color: "#fff", fontSize: 14, lineHeight: 1.5 }}>Roster, promos, action queue, payment splits</div>
-          </div>
-        </Link>
+    <div style={{ paddingTop: 16 }}>
+      <h1 className="page-title">Hedgewise</h1>
+      <p className="page-sub">Promo arbitrage command center</p>
+      <div className="grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, maxWidth: 720, marginTop: 24 }}>
+        {SECTIONS.map(s => (
+          <Link key={s.href} href={s.href} className="card card-link" style={{ padding: 18 }}>
+            <div className="section-title">{s.title}</div>
+            <div style={{ color: "var(--text-2)", fontSize: 13, marginTop: 6 }}>{s.body}</div>
+          </Link>
+        ))}
       </div>
     </div>
   );

@@ -12,8 +12,8 @@ interface Client {
   loan_balance: number; total_profit: number; promos?: Promo[];
 }
 
-const statusColor = (s:string) => ({"Active":"#ffd60a","Graded - Win":"#39ff14","Graded - Loss":"#ff4444","Withdrawn":"#00e5ff","Pending":"#b388ff","Flagged":"#ff9800"} as any)[s] || "#555";
-const tag = {background:"transparent",border:"1px solid #1a1a2e",borderRadius:4,color:"#444",fontSize:10,padding:"2px 7px",cursor:"pointer"};
+const statusColor = (s:string) => ({"Active":"var(--warn)","Graded - Win":"var(--pos)","Graded - Loss":"var(--neg)","Withdrawn":"var(--accent)","Pending":"var(--accent)","Flagged":"var(--warn)"} as any)[s] || "var(--muted)";
+const tag = {background:"transparent",border:"1px solid var(--border)",borderRadius:4,color:"var(--muted)",fontSize:10,padding:"2px 7px",cursor:"pointer"};
 
 export default function ClientsPage() {
   const [clients,setClients] = useState<Client[]>([]);
@@ -68,7 +68,7 @@ export default function ClientsPage() {
     const client = clients.find(c => c.id === cid);
     const promo = client?.promos?.find(p => p.id === pid);
     if (client && promo) setQueue(outcome === "win" ? [
-      {type:"text",msg:`Text ${client.name}: "Your ${promo.book} promo landed! Withdraw ${promo.profit ? fmt(promo.profit) : "funds"} now 🎉"`},
+      {type:"text",msg:`Text ${client.name}: "Your ${promo.book} promo landed! Withdraw ${promo.profit ? fmt(promo.profit) : "funds"}"`},
       {type:"next",msg:`Next: Move ${client.name} to next book in sequence`},
     ] : [
       {type:"text",msg:`Text ${client.name}: "Refund incoming — watch for bonus cash in your ${promo.book} account"`},
@@ -79,19 +79,19 @@ export default function ClientsPage() {
 
   const sc = sel ? clients.find(c => c.id === sel) : null;
 
-  if (loading) return <div style={{padding:40,color:"#555"}}>Loading clients...</div>;
+  if (loading) return <div style={{padding:40,color:"var(--muted)"}}>Loading clients…</div>;
 
   return (
     <div>
-      {dbError && <div className="card" style={{borderColor:"#ff4444",marginBottom:16,color:"#ff4444"}}>
-        ⚠ Database: {dbError} — Make sure you ran the SQL setup in Supabase (see README).
+      {dbError && <div className="card" style={{borderColor:"var(--neg)",marginBottom:16,color:"var(--neg)"}}>
+        Database error: {dbError}. Make sure the SQL setup has been run in Supabase (see README).
       </div>}
 
       <div className="grid-2col" style={{display:"grid",gridTemplateColumns:sc?"280px 1fr":"360px",gap:16}}>
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <span style={{color:"#3a3a5a",fontSize:10,letterSpacing:2,textTransform:"uppercase"}}>Clients ({clients.length})</span>
-            <button className="btn-ghost" onClick={()=>setShowAdd(!showAdd)} style={{borderColor:"#00e5ff",color:"#00e5ff"}}>+ Add Client</button>
+            <span style={{color:"var(--muted)",fontSize:11,letterSpacing:0.3,textTransform:"uppercase"}}>Clients · {clients.length}</span>
+            <button className="btn-ghost" onClick={()=>setShowAdd(!showAdd)} >Add client</button>
           </div>
 
           {showAdd && (
@@ -102,7 +102,7 @@ export default function ClientsPage() {
               <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:10}}>
                 {BOOKS.map(b=>(
                   <button key={b} className="btn" onClick={()=>setNc(p=>({...p,books:p.books.includes(b)?p.books.filter(x=>x!==b):[...p.books,b]}))}
-                    style={{...tag,borderColor:nc.books.includes(b)?"#00e5ff":"#1a1a2e",color:nc.books.includes(b)?"#00e5ff":"#444",background:nc.books.includes(b)?"#00e5ff10":"transparent"}}>
+                    style={{...tag,borderColor:nc.books.includes(b)?"var(--accent)":"var(--border)",color:nc.books.includes(b)?"var(--accent)":"var(--muted)",background:nc.books.includes(b)?"var(--accent-soft)":"transparent"}}>
                     {b}
                   </button>
                 ))}
@@ -112,18 +112,18 @@ export default function ClientsPage() {
           )}
 
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {clients.length === 0 && !showAdd && <div style={{color:"#444",fontSize:13,textAlign:"center",padding:24}}>No clients yet</div>}
+            {clients.length === 0 && !showAdd && <div style={{color:"var(--muted)",fontSize:13,textAlign:"center",padding:24}}>No clients yet</div>}
             {clients.map(c=>(
               <div key={c.id} className="card" onClick={()=>setSel(c.id===sel?null:c.id)}
-                style={{cursor:"pointer",borderColor:c.id===sel?"#00e5ff55":"#1e1e35",background:c.id===sel?"#00e5ff08":"#0a0a1c"}}>
+                style={{cursor:"pointer",borderColor:c.id===sel?"var(--border)":"var(--border)",background:c.id===sel?"var(--accent-soft)":"var(--surface)"}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
                   <div>
-                    <div style={{color:"#fff",fontWeight:700,fontSize:14}}>{c.name}</div>
-                    <div style={{color:"#252540",fontSize:11,marginTop:2}}>{c.phone}</div>
+                    <div style={{color:"var(--text)",fontWeight:600,fontSize:14}}>{c.name}</div>
+                    <div style={{color:"var(--muted)",fontSize:11,marginTop:2}}>{c.phone}</div>
                   </div>
                   <div style={{textAlign:"right"}}>
-                    <div style={{color:"#39ff14",fontWeight:700}}>+{fmt(c.total_profit)}</div>
-                    <div style={{color:"#ff4444",fontSize:11}}>Loan: {fmt(c.loan_balance)}</div>
+                    <div style={{color:"var(--pos)",fontWeight:600}}>+{fmt(c.total_profit)}</div>
+                    <div style={{color:"var(--neg)",fontSize:11}}>Loan: {fmt(c.loan_balance)}</div>
                   </div>
                 </div>
                 <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
@@ -138,12 +138,12 @@ export default function ClientsPage() {
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
               <div>
-                <div style={{color:"#fff",fontWeight:800,fontSize:18}}>{sc.name}</div>
-                <div style={{color:"#252540",fontSize:12,marginTop:2}}>
-                  {sc.phone} · Loan: <span style={{color:"#ff4444"}}>{fmt(sc.loan_balance)}</span> · Profit: <span style={{color:"#39ff14"}}>+{fmt(sc.total_profit)}</span>
+                <div style={{color:"var(--text)",fontWeight:600,fontSize:18}}>{sc.name}</div>
+                <div style={{color:"var(--muted)",fontSize:12,marginTop:2}}>
+                  {sc.phone} · Loan: <span style={{color:"var(--neg)"}}>{fmt(sc.loan_balance)}</span> · Profit: <span style={{color:"var(--pos)"}}>+{fmt(sc.total_profit)}</span>
                 </div>
               </div>
-              <button className="btn-ghost" onClick={()=>setShowPromo(!showPromo)} style={{borderColor:"#39ff14",color:"#39ff14"}}>+ Add Promo</button>
+              <button className="btn-ghost" onClick={()=>setShowPromo(!showPromo)} >Add promo</button>
             </div>
 
             {showPromo && (
@@ -162,37 +162,37 @@ export default function ClientsPage() {
             )}
 
             {queue.length>0 && (
-              <div className="card" style={{borderColor:"#ffd60a44",marginBottom:12}}>
-                <div style={{color:"#ffd60a",fontWeight:700,fontSize:10,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>⚡ Action Queue</div>
+              <div className="card" style={{borderColor:"var(--border)",marginBottom:12}}>
+                <div style={{color:"var(--text)",fontWeight:600,fontSize:11,letterSpacing:0.3,textTransform:"uppercase",marginBottom:10}}>Action queue</div>
                 {queue.map((a,i)=>(
                   <div key={i} style={{display:"flex",gap:8,marginBottom:7}}>
-                    <span>{a.type==="text"?"💬":a.type==="next"?"➡️":"👁"}</span>
-                    <span style={{color:"#bbb",fontSize:12,lineHeight:1.5}}>{a.msg}</span>
+                    <span style={{color:"var(--muted)",fontSize:11,textTransform:"uppercase",letterSpacing:0.3,minWidth:56}}>{a.type==="text"?"Text":a.type==="next"?"Next":"Watch"}</span>
+                    <span style={{color:"var(--text-2)",fontSize:12,lineHeight:1.5}}>{a.msg}</span>
                   </div>
                 ))}
-                <button className="btn-ghost" onClick={()=>setQueue([])} style={{borderColor:"#ffd60a",color:"#ffd60a",marginTop:6,fontSize:10}}>Clear</button>
+                <button className="btn-ghost" onClick={()=>setQueue([])} style={{marginTop:6}}>Clear</button>
               </div>
             )}
 
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {(!sc.promos || sc.promos.length===0) && <div style={{color:"#1a1a2e",fontSize:13,textAlign:"center",padding:32}}>No promos yet</div>}
+              {(!sc.promos || sc.promos.length===0) && <div style={{color:"var(--border)",fontSize:13,textAlign:"center",padding:32}}>No promos yet</div>}
               {sc.promos?.map(p=>(
                 <div key={p.id} className="card" style={{borderColor:statusColor(p.status)+"33"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                     <div>
                       <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:3}}>
-                        <span style={{color:"#fff",fontWeight:700}}>{p.book}</span>
+                        <span style={{color:"var(--text)",fontWeight:600}}>{p.book}</span>
                         <span style={{...tag,borderColor:statusColor(p.status),color:statusColor(p.status)}}>{p.status}</span>
                       </div>
-                      <div style={{color:"#3a3a5a",fontSize:12}}>{p.type} · {fmt(p.amount)} · {p.date}</div>
-                      {p.notes && <div style={{color:"#252540",fontSize:11,marginTop:2}}>{p.notes}</div>}
+                      <div style={{color:"var(--muted)",fontSize:12}}>{p.type} · {fmt(p.amount)} · {p.date}</div>
+                      {p.notes && <div style={{color:"var(--muted)",fontSize:11,marginTop:2}}>{p.notes}</div>}
                     </div>
                     <div style={{textAlign:"right"}}>
-                      {p.profit>0 && <div style={{color:"#39ff14",fontWeight:700,marginBottom:4}}>+{fmt(p.profit)}</div>}
+                      {p.profit>0 && <div style={{color:"var(--pos)",fontWeight:600,marginBottom:4}}>+{fmt(p.profit)}</div>}
                       {p.status==="Active" && (
                         <div style={{display:"flex",gap:4}}>
-                          <button className="btn-ghost" onClick={()=>grade(sc.id,p.id,"win")} style={{borderColor:"#39ff14",color:"#39ff14"}}>✓ Win</button>
-                          <button className="btn-ghost" onClick={()=>grade(sc.id,p.id,"loss")} style={{borderColor:"#ff4444",color:"#ff4444"}}>✗ Loss</button>
+                          <button className="btn-ghost" onClick={()=>grade(sc.id,p.id,"win")} style={{borderColor:"var(--pos)",color:"var(--pos)"}}>Win</button>
+                          <button className="btn-ghost" onClick={()=>grade(sc.id,p.id,"loss")} style={{borderColor:"var(--neg)",color:"var(--neg)"}}>Loss</button>
                         </div>
                       )}
                     </div>
@@ -202,12 +202,12 @@ export default function ClientsPage() {
             </div>
 
             {sc.total_profit > 0 && (
-              <div className="card" style={{marginTop:12,borderColor:"#00e5ff22"}}>
-                <div style={{color:"#00e5ff",fontWeight:700,fontSize:10,letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>Payment Split (60/40)</div>
+              <div className="card" style={{marginTop:12,borderColor:"var(--border)"}}>
+                <div style={{color:"var(--text)",fontWeight:600,fontSize:11,letterSpacing:0.3,textTransform:"uppercase",marginBottom:12}}>Payment split (60/40)</div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,textAlign:"center"}}>
-                  <div><div style={{color:"#fff",fontWeight:800,fontSize:20}}>{fmt(sc.total_profit)}</div><div style={{color:"#252540",fontSize:11}}>Total</div></div>
-                  <div><div style={{color:"#00e5ff",fontWeight:800,fontSize:20}}>{fmt(sc.total_profit*0.6)}</div><div style={{color:"#252540",fontSize:11}}>Your 60%</div></div>
-                  <div><div style={{color:"#39ff14",fontWeight:800,fontSize:20}}>{fmt(sc.total_profit*0.4)}</div><div style={{color:"#252540",fontSize:11}}>Client 40%</div></div>
+                  <div><div style={{color:"var(--text)",fontWeight:600,fontSize:20}}>{fmt(sc.total_profit)}</div><div style={{color:"var(--muted)",fontSize:11}}>Total</div></div>
+                  <div><div style={{color:"var(--accent)",fontWeight:600,fontSize:20}}>{fmt(sc.total_profit*0.6)}</div><div style={{color:"var(--muted)",fontSize:11}}>Your 60%</div></div>
+                  <div><div style={{color:"var(--pos)",fontWeight:600,fontSize:20}}>{fmt(sc.total_profit*0.4)}</div><div style={{color:"var(--muted)",fontSize:11}}>Client 40%</div></div>
                 </div>
               </div>
             )}

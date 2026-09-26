@@ -26,7 +26,6 @@ export default function ProfitBoostFinder() {
   return (
     <FinderShell
       title="Profit Boost Finder"
-      accent="#39ff14"
       config={config}
       setConfig={setConfig}
       games={finder.games}
@@ -39,20 +38,20 @@ export default function ProfitBoostFinder() {
       inputs={
         <div className="card">
           <div style={{ marginBottom: 12 }}>
-            <span className="label">Bet Stake *</span>
+            <span className="label">Bet stake</span>
             <div style={{ position: "relative" }}>
-              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#3a3a5a", fontSize: 14 }}>$</span>
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", fontSize: 14, pointerEvents: "none" }}>$</span>
               <input className="input" value={stake} onChange={e => setStake(e.target.value)} style={{ paddingLeft: 24 }} />
             </div>
           </div>
           <div style={{ marginBottom: 12 }}>
-            <span className="label">Boost % *</span>
+            <span className="label">Boost %</span>
             <input className="input" value={boostPct} onChange={e => setBoostPct(e.target.value)} placeholder="25" />
           </div>
           <div>
-            <span className="label">Max Boost Cap (USD)</span>
+            <span className="label">Max boost cap</span>
             <div style={{ position: "relative" }}>
-              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#3a3a5a", fontSize: 14 }}>$</span>
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", fontSize: 14, pointerEvents: "none" }}>$</span>
               <input className="input" value={maxBoostCap} onChange={e => setMaxBoostCap(e.target.value)} style={{ paddingLeft: 24 }} />
             </div>
           </div>
@@ -76,9 +75,9 @@ export default function ProfitBoostFinder() {
             fixedBookName={config.fixedBook}
             stats={[
               { label: "Stake", value: fmt(s || 0) },
-              { label: "Boosted Odds", value: toAm(boostedDecimal), color: "#39ff14" },
-              { label: "Hedge Stake", value: fmt(hedgeStake), color: "#ffd60a" },
-              { label: "Guaranteed Profit", value: fmt(guaranteed), color: "#39ff14" },
+              { label: "Boosted odds", value: toAm(boostedDecimal) },
+              { label: "Hedge stake", value: fmt(hedgeStake) },
+              { label: "Guaranteed profit", value: fmt(guaranteed), color: "var(--pos)" },
             ]}
             showHold={false}
           />

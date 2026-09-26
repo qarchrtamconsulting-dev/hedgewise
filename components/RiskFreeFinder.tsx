@@ -25,7 +25,6 @@ export default function RiskFreeFinder() {
   return (
     <FinderShell
       title="Risk Free Bet Finder"
-      accent="#b388ff"
       config={config}
       setConfig={setConfig}
       games={finder.games}
@@ -38,13 +37,13 @@ export default function RiskFreeFinder() {
       inputs={
         <>
           <div className="card">
-            <span className="label">Promo Amount *</span>
+            <span className="label">Promo amount</span>
             <USDInput value={promoAmt} set={setPromoAmt} placeholder="500.00" />
-            <div style={{ color: "#444", fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
-              You bet this amount real money. If it loses, you get a refund as bonus.
+            <div className="hint">
+              Real-money stake. If it loses, the book refunds it as bonus credit.
             </div>
           </div>
-          <Slider label="Refund Conversion %" value={refundConv} set={setRefundConv} />
+          <Slider label="Refund conversion" value={refundConv} set={setRefundConv} />
         </>
       }
       renderGame={(g) => {
@@ -70,10 +69,10 @@ export default function RiskFreeFinder() {
             game={g}
             fixedBookName={config.fixedBook}
             stats={[
-              { label: "Real Stake", value: fmt(amt || 0) },
-              { label: "Hedge Stake", value: fmt(Math.max(0, hedgeStake)), color: "#ffd60a" },
-              { label: "If Win", value: `${winNet >= 0 ? "+" : ""}${fmt(winNet)}`, color: winNet >= 0 ? "#39ff14" : "#ff4444" },
-              { label: "If Lose (refund)", value: `${lossNet >= 0 ? "+" : ""}${fmt(lossNet)}`, color: lossNet >= 0 ? "#39ff14" : "#ff4444" },
+              { label: "Real stake", value: fmt(amt || 0) },
+              { label: "Hedge stake", value: fmt(Math.max(0, hedgeStake)) },
+              { label: "If win", value: `${winNet >= 0 ? "+" : ""}${fmt(winNet)}`, color: winNet >= 0 ? "var(--pos)" : "var(--neg)" },
+              { label: "If lose (refund)", value: `${lossNet >= 0 ? "+" : ""}${fmt(lossNet)}`, color: lossNet >= 0 ? "var(--pos)" : "var(--neg)" },
             ]}
             showHold={false}
           />

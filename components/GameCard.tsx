@@ -1,6 +1,6 @@
 "use client";
 import { FinderGame } from "./useGameFinder";
-import { holdColor, fmt } from "@/lib/constants";
+import { holdColor } from "@/lib/constants";
 
 interface Stat { label: string; value: string; color?: string; }
 
@@ -12,50 +12,43 @@ interface Props {
   showHold?: boolean;
 }
 
-export default function GameCard({ game, fixedBookName, stats, showHold = true }: Props) {
+function Leg({ book, role, odds, team, link }: { book: string; role: string; odds: string; team: string; link?: string | null }) {
   return (
-    <div className="card" style={{ borderColor: showHold ? holdColor(game.hold) + "55" : "#1e1e35" }}>
+    <div className="leg">
+      <div className="stat-label">{book} · {role}</div>
+      <div className="leg-odds num" style={{ marginTop: 4 }}>{odds}</div>
+      <div style={{ color: "var(--text-2)", fontSize: 12, marginTop: 2 }}>{team}</div>
+      {link && (
+        <a className="leg-link" href={link} target="_blank" rel="noopener noreferrer">Open {book}</a>
+      )}
+    </div>
+  );
+}
+
+export default function GameCard({ game, fixedBookName, stats, showHold = true }: Props) {
+  const start = new Date(game.commence);
+  return (
+    <div className="card">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ color: "#fff", fontWeight: 700, fontSize: 14, marginBottom: 3 }}>
-            {game.away} <span style={{ color: "#1a1a35" }}>@</span> {game.home}
+          <div style={{ fontWeight: 600, fontSize: 14 }}>
+            {game.away} <span style={{ color: "var(--muted)", fontWeight: 400 }}>at</span> {game.home}
           </div>
-          <div style={{ color: "#1e1e38", fontSize: 10, marginBottom: 13 }}>
-            {new Date(game.commence).toLocaleDateString()} · {new Date(game.commence).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          <div className="num" style={{ color: "var(--muted)", fontSize: 12, marginTop: 2, marginBottom: 12 }}>
+            {start.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} · {start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
           </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "stretch" }}>
-            <div style={{ background: "#05050f", borderRadius: 8, padding: "9px 14px", border: "1px solid #0e0e20", display: "flex", flexDirection: "column" }}>
-              <div style={{ color: "#252545", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>{fixedBookName} · BET</div>
-              <div style={{ color: "#00e5ff", fontWeight: 800, fontSize: 22 }}>{game.fixedAmerican}</div>
-              <div style={{ color: "#1e1e38", fontSize: 10, marginTop: 3 }}>{game.fixedTeam}</div>
-              {game.fixedLink && (
-                <a href={game.fixedLink} target="_blank" rel="noopener noreferrer"
-                  style={{ display: "inline-block", marginTop: 8, color: "#00e5ff", border: "1px solid #00e5ff44", borderRadius: 4, padding: "3px 8px", fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textAlign: "center" }}>
-                  Open in {fixedBookName} →
-                </a>
-              )}
-            </div>
-
-            <div style={{ background: "#05050f", borderRadius: 8, padding: "9px 14px", border: "1px solid #0e0e20", display: "flex", flexDirection: "column" }}>
-              <div style={{ color: "#252545", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>{game.hedgeBookName} · HEDGE</div>
-              <div style={{ color: "#b388ff", fontWeight: 800, fontSize: 22 }}>{game.hedgeAmerican}</div>
-              <div style={{ color: "#1e1e38", fontSize: 10, marginTop: 3 }}>{game.hedgeTeam}</div>
-              {game.hedgeLink && (
-                <a href={game.hedgeLink} target="_blank" rel="noopener noreferrer"
-                  style={{ display: "inline-block", marginTop: 8, color: "#b388ff", border: "1px solid #b388ff44", borderRadius: 4, padding: "3px 8px", fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textAlign: "center" }}>
-                  Open in {game.hedgeBookName} →
-                </a>
-              )}
-            </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Leg book={fixedBookName} role="Bet" odds={game.fixedAmerican} team={game.fixedTeam} link={game.fixedLink} />
+            <Leg book={game.hedgeBookName} role="Hedge" odds={game.hedgeAmerican} team={game.hedgeTeam} link={game.hedgeLink} />
           </div>
 
           {stats.length > 0 && (
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #14142a", display: "flex", gap: 20, flexWrap: "wrap" }}>
+            <div className="divider" style={{ marginTop: 12, paddingTop: 12, display: "flex", gap: 24, flexWrap: "wrap" }}>
               {stats.map((s, i) => (
                 <div key={i}>
-                  <div style={{ color: "#252545", fontSize: 9, letterSpacing: 1, textTransform: "uppercase" }}>{s.label}</div>
-                  <div style={{ color: s.color || "#fff", fontSize: 14, fontWeight: 700, marginTop: 2 }}>{s.value}</div>
+                  <div className="stat-label">{s.label}</div>
+                  <div className="stat-value num" style={{ color: s.color || "var(--text)" }}>{s.value}</div>
                 </div>
               ))}
             </div>
@@ -64,8 +57,8 @@ export default function GameCard({ game, fixedBookName, stats, showHold = true }
 
         {showHold && (
           <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div style={{ color: holdColor(game.hold), fontWeight: 800, fontSize: 26, lineHeight: 1 }}>{game.hold.toFixed(2)}%</div>
-            <div style={{ color: "#1a1a35", fontSize: 10, marginTop: 3 }}>hold</div>
+            <div className="num" style={{ color: holdColor(game.hold), fontWeight: 600, fontSize: 22, lineHeight: 1 }}>{game.hold.toFixed(2)}%</div>
+            <div className="stat-label" style={{ marginTop: 4 }}>Hold</div>
           </div>
         )}
       </div>

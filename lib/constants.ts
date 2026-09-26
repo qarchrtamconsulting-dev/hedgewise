@@ -22,4 +22,4 @@ export const toDec = (am: string|number) => {
 export const toAm = (d: number) => d >= 2 ? `+${Math.round((d-1)*100)}` : `-${Math.round(100/(d-1))}`;
 export const fmt = (n: number) => `$${Math.abs(n).toFixed(2)}`;
 export const mkHold = (d1: number, d2: number) => ((1/d1)+(1/d2)-1)*100;
-export const holdColor = (h: number) => h < 1 ? "#39ff14" : h < 2.5 ? "#ffd60a" : h < 4.5 ? "#ff9800" : "#ff4444";
+export const holdColor = (h: number) => h < 1.5 ? "var(--pos)" : h < 3.5 ? "var(--warn)" : "var(--neg)";

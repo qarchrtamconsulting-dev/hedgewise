@@ -1,12 +1,13 @@
 "use client";
 import { ReactNode } from "react";
-import { CheckList, Toggle, USDInput } from "./ui";
+import { CheckList, Toggle } from "./ui";
 import { BOOKS, LEAGUES } from "@/lib/constants";
 import { FinderConfig, FinderGame } from "./useGameFinder";
 
 interface Props {
   title: string;
-  accent: string;
+  /** kept for backwards compatibility; the shell now uses the theme accent */
+  accent?: string;
   config: FinderConfig;
   setConfig: (c: FinderConfig) => void;
   games: FinderGame[];
@@ -23,73 +24,70 @@ interface Props {
 }
 
 export default function FinderShell({
-  title, accent, config, setConfig, games, loading, error, updated, callsLeft, cached, onFetch, inputs, renderGame,
+  title, config, setConfig, games, loading, error, updated, callsLeft, cached, onFetch, inputs, renderGame,
 }: Props) {
   const set = (patch: Partial<FinderConfig>) => setConfig({ ...config, ...patch });
 
   return (
-    <div className="grid-2col" style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 20, alignItems: "start" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div className="card" style={{ borderColor: accent + "55" }}>
-          <div style={{ color: accent, fontWeight: 800, fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase" }}>{title}</div>
+    <div className="grid-2col" style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 20, alignItems: "start" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ padding: "2px 2px 4px" }}>
+          <div className="section-title" style={{ fontSize: 15 }}>{title}</div>
         </div>
 
         {inputs}
 
         <div className="card">
-          <span className="label">Select Fixed Book *</span>
+          <span className="label">Fixed book</span>
           <select className="input" value={config.fixedBook} onChange={e => set({ fixedBook: e.target.value })}>
-            <option value="">Select a book...</option>
+            <option value="">Select a book</option>
             {BOOKS.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
         </div>
 
-        <CheckList label="Select League(s)" options={LEAGUES} value={config.leagues} onChange={(v) => set({ leagues: v })} req />
-        <CheckList label="Select Hedge Book(s)" options={BOOKS.filter(b => b !== config.fixedBook)} value={config.hedgeBooks} onChange={(v) => set({ hedgeBooks: v })} req />
+        <CheckList label="Leagues" options={LEAGUES} value={config.leagues} onChange={(v) => set({ leagues: v })} req />
+        <CheckList label="Hedge books" options={BOOKS.filter(b => b !== config.fixedBook)} value={config.hedgeBooks} onChange={(v) => set({ hedgeBooks: v })} req />
 
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <Toggle on={config.hideLive} set={(v) => set({ hideLive: v })} label="Hide Live Games" />
-        </div>
-
-        <div className="card">
-          <div style={{ marginBottom: 12 }}>
-            <span className="label">Fixed Book Min Odds</span>
-            <input className="input" value={config.fixedMinAmerican} onChange={e => set({ fixedMinAmerican: e.target.value })} />
+        <div className="card" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div>
+            <span className="label">Min odds</span>
+            <input className="input num" value={config.fixedMinAmerican} onChange={e => set({ fixedMinAmerican: e.target.value })} />
           </div>
           <div>
-            <span className="label">Fixed Book Max Odds</span>
-            <input className="input" value={config.fixedMaxAmerican} onChange={e => set({ fixedMaxAmerican: e.target.value })} />
+            <span className="label">Max odds</span>
+            <input className="input num" value={config.fixedMaxAmerican} onChange={e => set({ fixedMaxAmerican: e.target.value })} />
+          </div>
+          <div style={{ gridColumn: "1 / -1", paddingTop: 4 }}>
+            <Toggle on={config.hideLive} set={(v) => set({ hideLive: v })} label="Hide live games" />
           </div>
         </div>
 
-        <button className="btn-primary" onClick={onFetch} disabled={loading} style={{ background: accent, color: "#000" }}>
-          {loading ? "⟳ Fetching..." : "⚡ Find Games"}
+        <button className="btn-primary" onClick={onFetch} disabled={loading}>
+          {loading ? "Fetching…" : "Find games"}
         </button>
 
-        {error && <div style={{ color: "#ff4444", fontSize: 12, padding: "8px 0", lineHeight: 1.5 }}>⚠ {error}</div>}
+        {error && <div style={{ color: "var(--neg)", fontSize: 12, lineHeight: 1.5 }}>{error}</div>}
         {callsLeft && (
-          <div style={{ color: "#444", fontSize: 11, padding: "4px 0" }}>
+          <div className="num" style={{ color: "var(--muted)", fontSize: 11 }}>
             {callsLeft} API calls left{cached ? " · cached" : ""}
           </div>
         )}
       </div>
 
       <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>
-            {games.length > 0 ? `${games.length} games` : "Results"}
-            {updated && <span style={{ color: "#252545", fontSize: 10, marginLeft: 8 }}>· {updated}</span>}
-          </div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12, minHeight: 22 }}>
+          <div className="section-title">{games.length > 0 ? `${games.length} games` : "Results"}</div>
+          {updated && <span style={{ color: "var(--muted)", fontSize: 12 }}>Updated {updated}</span>}
         </div>
 
         {games.length === 0 && !loading && (
-          <div className="card" style={{ textAlign: "center", padding: "80px 20px" }}>
-            <div style={{ fontSize: 48, opacity: 0.06, marginBottom: 14 }}>⚡</div>
-            <div style={{ color: "#1a1a35", fontSize: 13 }}>Configure inputs and books, then fetch live games</div>
+          <div className="card" style={{ textAlign: "center", padding: "72px 20px", borderStyle: "dashed", background: "transparent", boxShadow: "none" }}>
+            <div style={{ color: "var(--text-2)", fontSize: 13 }}>No results yet</div>
+            <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 4 }}>Set your inputs and books, then find games.</div>
           </div>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {games.map(g => renderGame(g))}
         </div>
       </div>

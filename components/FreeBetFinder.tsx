@@ -23,7 +23,6 @@ export default function FreeBetFinder() {
   return (
     <FinderShell
       title="Free Bet Finder"
-      accent="#00e5ff"
       config={config}
       setConfig={setConfig}
       games={finder.games}
@@ -35,10 +34,10 @@ export default function FreeBetFinder() {
       onFetch={() => finder.fetchGames(config)}
       inputs={
         <div className="card">
-          <span className="label">Free Bet Amount *</span>
+          <span className="label">Free bet amount</span>
           <USDInput value={freeBetAmt} set={setFreeBetAmt} placeholder="500.00" />
-          <div style={{ color: "#444", fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
-            Stake-not-returned free bet. Tool finds + odds at your fixed book and best - odds hedge to lock in profit.
+          <div className="hint">
+            Stake-not-returned free bet. Finds plus-money odds at your fixed book and the best opposing hedge.
           </div>
         </div>
       }
@@ -55,10 +54,10 @@ export default function FreeBetFinder() {
             game={g}
             fixedBookName={config.fixedBook}
             stats={[
-              { label: "Free Bet", value: fmt(fb || 0) },
-              { label: "Hedge Stake", value: fmt(hedgeStake), color: "#ffd60a" },
-              { label: "Guaranteed Profit", value: fmt(guaranteed), color: "#39ff14" },
-              { label: "Conversion %", value: `${conversion.toFixed(1)}%`, color: "#39ff14" },
+              { label: "Free bet", value: fmt(fb || 0) },
+              { label: "Hedge stake", value: fmt(hedgeStake) },
+              { label: "Guaranteed profit", value: fmt(guaranteed), color: "var(--pos)" },
+              { label: "Conversion", value: `${conversion.toFixed(1)}%` },
             ]}
             showHold={false}
           />
