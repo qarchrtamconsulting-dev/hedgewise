@@ -31,7 +31,7 @@ export default function ClientPage({ params }: { params: { id: string } }) {
       const db = await getDb();
       const [c, p, l, m, s] = await Promise.all([
         db.from("clients").select("*").eq("id", id).single(),
-        fetchAll<Play>((a, b) => db.from("play_calc").select("*").eq("client_id", id).order("placed_on", { ascending: false, nullsFirst: true }).range(a, b)),
+        fetchAll<Play>((a, b) => db.from("play_calc").select("*").eq("client_id", id).order("placed_on", { ascending: false, nullsFirst: false }).range(a, b)),
         fetchAll<Leg>((a, b) => db.from("legs").select("*, plays!inner(client_id)").eq("plays.client_id", id).order("seq").range(a, b)),
         fetchAll<Movement>((a, b) => db.from("capital_movements").select("*").eq("client_id", id).order("date", { ascending: false }).range(a, b)),
         fetchAll<Settlement>((a, b) => db.from("settlements").select("*").eq("client_id", id).order("date", { ascending: false }).range(a, b)),
