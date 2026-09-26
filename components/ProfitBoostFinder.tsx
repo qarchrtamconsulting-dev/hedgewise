@@ -3,20 +3,23 @@ import { useState } from "react";
 import FinderShell from "./FinderShell";
 import GameCard from "./GameCard";
 import { useGameFinder, FinderConfig } from "./useGameFinder";
+import PresetBar from "./PresetBar";
+import { PresetState, defaultPreset } from "@/lib/presets";
 import { fmt, toAm } from "@/lib/constants";
 
-export default function ProfitBoostFinder() {
-  const [stake, setStake] = useState("100");
-  const [boostPct, setBoostPct] = useState("25");
-  const [maxBoostCap, setMaxBoostCap] = useState("50");
-  const [config, setConfig] = useState<FinderConfig>({
-    fixedBook: "FanDuel",
-    leagues: ["NBA", "MLB"],
-    hedgeBooks: ["DraftKings", "BetMGM", "Caesars"],
-    fixedMinAmerican: "-200",
-    fixedMaxAmerican: "+300",
-    hideLive: true,
-  });
+export default function ProfitBoostFinder({ initial, initialName }: { initial?: PresetState; initialName?: string }) {
+  const start = initial || defaultPreset("boost");
+  const [stake, setStake] = useState<string>(String(start.inputs.stake ?? "100"));
+  const [boostPct, setBoostPct] = useState<string>(String(start.inputs.boost ?? "25"));
+  const [maxBoostCap, setMaxBoostCap] = useState<string>(String(start.inputs.cap ?? "50"));
+  const [config, setConfig] = useState<FinderConfig>(start.config);
+  const current: PresetState = { config, inputs: { stake: stake, boost: boostPct, cap: maxBoostCap } };
+  const apply = (p: PresetState) => {
+    setConfig(p.config);
+    if (p.inputs.stake !== undefined) setStake(String(p.inputs.stake));
+    if (p.inputs.boost !== undefined) setBoostPct(String(p.inputs.boost));
+    if (p.inputs.cap !== undefined) setMaxBoostCap(String(p.inputs.cap));
+  };
   const finder = useGameFinder();
 
   const s = parseFloat(stake);
@@ -26,6 +29,7 @@ export default function ProfitBoostFinder() {
   return (
     <FinderShell
       title="Profit Boost Finder"
+      presetBar={<PresetBar tool="boost" current={current} apply={apply} initialName={initialName} />}
       config={config}
       setConfig={setConfig}
       games={finder.games}
@@ -79,6 +83,7 @@ export default function ProfitBoostFinder() {
               { label: "Hedge stake", value: fmt(hedgeStake) },
               { label: "Guaranteed profit", value: fmt(guaranteed), color: "var(--pos)" },
             ]}
+            ticket={{ type: "Profit Boost", amount: s || 0, fixedStake: s || 0, hedgeStake, expected: guaranteed, fixedNote: "apply your profit boost" }}
             showHold={false}
           />
         );

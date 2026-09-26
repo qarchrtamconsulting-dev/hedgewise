@@ -4,18 +4,19 @@ import FinderShell from "./FinderShell";
 import GameCard from "./GameCard";
 import { useGameFinder, FinderConfig } from "./useGameFinder";
 import { USDInput } from "./ui";
+import PresetBar from "./PresetBar";
+import { PresetState, defaultPreset } from "@/lib/presets";
 import { fmt } from "@/lib/constants";
 
-export default function FreeBetFinder() {
-  const [freeBetAmt, setFreeBetAmt] = useState("500");
-  const [config, setConfig] = useState<FinderConfig>({
-    fixedBook: "FanDuel",
-    leagues: ["NBA", "MLB"],
-    hedgeBooks: ["DraftKings", "BetMGM", "Caesars"],
-    fixedMinAmerican: "+200",   // free bets convert better at +odds
-    fixedMaxAmerican: "+800",
-    hideLive: true,
-  });
+export default function FreeBetFinder({ initial, initialName }: { initial?: PresetState; initialName?: string }) {
+  const start = initial || defaultPreset("freebet");
+  const [freeBetAmt, setFreeBetAmt] = useState<string>(String(start.inputs.amount ?? "500"));
+  const [config, setConfig] = useState<FinderConfig>(start.config);
+  const current: PresetState = { config, inputs: { amount: freeBetAmt } };
+  const apply = (p: PresetState) => {
+    setConfig(p.config);
+    if (p.inputs.amount !== undefined) setFreeBetAmt(String(p.inputs.amount));
+  };
   const finder = useGameFinder();
 
   const fb = parseFloat(freeBetAmt);
@@ -23,6 +24,7 @@ export default function FreeBetFinder() {
   return (
     <FinderShell
       title="Free Bet Finder"
+      presetBar={<PresetBar tool="freebet" current={current} apply={apply} initialName={initialName} />}
       config={config}
       setConfig={setConfig}
       games={finder.games}
@@ -59,6 +61,7 @@ export default function FreeBetFinder() {
               { label: "Guaranteed profit", value: fmt(guaranteed), color: "var(--pos)" },
               { label: "Conversion", value: `${conversion.toFixed(1)}%` },
             ]}
+            ticket={{ type: "Free Bet", amount: fb || 0, fixedStake: fb || 0, hedgeStake, expected: guaranteed, fixedNote: "use your free bet" }}
             showHold={false}
           />
         );

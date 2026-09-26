@@ -4,24 +4,26 @@ import FinderShell from "./FinderShell";
 import GameCard from "./GameCard";
 import { useGameFinder, FinderConfig } from "./useGameFinder";
 import { USDInput } from "./ui";
+import PresetBar from "./PresetBar";
+import { PresetState, defaultPreset } from "@/lib/presets";
 import { fmt } from "@/lib/constants";
 
-export default function LowHoldFinder() {
-  const [cashSize, setCashSize] = useState("100");
-  const [config, setConfig] = useState<FinderConfig>({
-    fixedBook: "FanDuel",
-    leagues: ["NBA", "MLB"],
-    hedgeBooks: ["DraftKings", "BetMGM", "Caesars"],
-    fixedMinAmerican: "-200",
-    fixedMaxAmerican: "+1000",
-    hideLive: true,
-  });
+export default function LowHoldFinder({ initial, initialName }: { initial?: PresetState; initialName?: string }) {
+  const start = initial || defaultPreset("lowhold");
+  const [cashSize, setCashSize] = useState<string>(String(start.inputs.cash ?? "100"));
+  const [config, setConfig] = useState<FinderConfig>(start.config);
+  const current: PresetState = { config, inputs: { cash: cashSize } };
+  const apply = (p: PresetState) => {
+    setConfig(p.config);
+    if (p.inputs.cash !== undefined) setCashSize(String(p.inputs.cash));
+  };
   const finder = useGameFinder();
   const cash = parseFloat(cashSize);
 
   return (
     <FinderShell
       title="Low Hold Finder"
+      presetBar={<PresetBar tool="lowhold" current={current} apply={apply} initialName={initialName} />}
       config={config}
       setConfig={setConfig}
       games={finder.games}
@@ -62,6 +64,7 @@ export default function LowHoldFinder() {
               { label: "If fixed wins", value: signed(fixedNet), color: tone(fixedNet) },
               { label: "If hedge wins", value: signed(hedgeNet), color: tone(hedgeNet) },
             ]}
+            ticket={{ type: "Low Hold", amount: stake, fixedStake: stake, hedgeStake, expected: Math.min(fixedNet, hedgeNet) }}
             showHold={true}
           />
         );

@@ -1,6 +1,6 @@
 export const BOOKS = ["FanDuel","DraftKings","BetMGM","Caesars","Bet365","Hard Rock","BetRivers","Fanatics"];
 export const LEAGUES = ["NBA","MLB","NHL","NFL","NCAAB","NCAAF"];
-export const PROMO_TYPES = ["Free Bet","Risk Free","Profit Boost","Deposit Match","Reload","Refer-a-Friend","Odds Boost"];
+export const PROMO_TYPES = ["Free Bet","Risk Free","Profit Boost","Low Hold","Deposit Match","Reload","Refer-a-Friend","Odds Boost"];
 export const STAGES = ["Active","Pending","Graded - Win","Graded - Loss","Withdrawn","Flagged"];
 
 export const BOOK_MAP: Record<string,string> = {

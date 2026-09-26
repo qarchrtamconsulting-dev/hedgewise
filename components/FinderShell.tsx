@@ -17,6 +17,8 @@ interface Props {
   callsLeft: string | null;
   cached: boolean;
   onFetch: () => void;
+  /** Preset picker / save / share controls */
+  presetBar?: ReactNode;
   /** Custom controls (top of left panel) — promo amount input, sliders, etc */
   inputs?: ReactNode;
   /** Per-game render (right panel) — receives game and renders the math */
@@ -24,7 +26,7 @@ interface Props {
 }
 
 export default function FinderShell({
-  title, config, setConfig, games, loading, error, updated, callsLeft, cached, onFetch, inputs, renderGame,
+  title, presetBar, config, setConfig, games, loading, error, updated, callsLeft, cached, onFetch, inputs, renderGame,
 }: Props) {
   const set = (patch: Partial<FinderConfig>) => setConfig({ ...config, ...patch });
 
@@ -34,6 +36,8 @@ export default function FinderShell({
         <div style={{ padding: "2px 2px 4px" }}>
           <div className="section-title" style={{ fontSize: 15 }}>{title}</div>
         </div>
+
+        {presetBar}
 
         {inputs}
 

@@ -1,6 +1,7 @@
 "use client";
 import { FinderGame } from "./useGameFinder";
 import { holdColor } from "@/lib/constants";
+import SendTicket, { Ticket } from "./SendTicket";
 
 interface Stat { label: string; value: string; color?: string; }
 
@@ -10,6 +11,8 @@ interface Props {
   /** stats shown in the bottom row (e.g. hedge stake, profit) */
   stats: Stat[];
   showHold?: boolean;
+  /** When present, shows "Send to client" with both legs pre-filled */
+  ticket?: Ticket;
 }
 
 function Leg({ book, role, odds, team, link }: { book: string; role: string; odds: string; team: string; link?: string | null }) {
@@ -25,7 +28,7 @@ function Leg({ book, role, odds, team, link }: { book: string; role: string; odd
   );
 }
 
-export default function GameCard({ game, fixedBookName, stats, showHold = true }: Props) {
+export default function GameCard({ game, fixedBookName, stats, showHold = true, ticket }: Props) {
   const start = new Date(game.commence);
   return (
     <div className="card">
@@ -51,6 +54,12 @@ export default function GameCard({ game, fixedBookName, stats, showHold = true }
                   <div className="stat-value num" style={{ color: s.color || "var(--text)" }}>{s.value}</div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {ticket && (
+            <div style={{ marginTop: 12 }}>
+              <SendTicket game={game} fixedBookName={fixedBookName} ticket={ticket} />
             </div>
           )}
         </div>

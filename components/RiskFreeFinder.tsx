@@ -4,19 +4,21 @@ import FinderShell from "./FinderShell";
 import GameCard from "./GameCard";
 import { useGameFinder, FinderConfig } from "./useGameFinder";
 import { USDInput, Slider } from "./ui";
+import PresetBar from "./PresetBar";
+import { PresetState, defaultPreset } from "@/lib/presets";
 import { fmt } from "@/lib/constants";
 
-export default function RiskFreeFinder() {
-  const [promoAmt, setPromoAmt] = useState("500");
-  const [refundConv, setRefundConv] = useState(70);
-  const [config, setConfig] = useState<FinderConfig>({
-    fixedBook: "FanDuel",
-    leagues: ["NBA", "MLB"],
-    hedgeBooks: ["DraftKings", "BetMGM", "Caesars"],
-    fixedMinAmerican: "+200",   // longshot side maximizes refund value
-    fixedMaxAmerican: "+1000",
-    hideLive: true,
-  });
+export default function RiskFreeFinder({ initial, initialName }: { initial?: PresetState; initialName?: string }) {
+  const start = initial || defaultPreset("riskfree");
+  const [promoAmt, setPromoAmt] = useState<string>(String(start.inputs.amount ?? "500"));
+  const [refundConv, setRefundConv] = useState<number>(Number(start.inputs.conv ?? 65));
+  const [config, setConfig] = useState<FinderConfig>(start.config);
+  const current: PresetState = { config, inputs: { amount: promoAmt, conv: refundConv } };
+  const apply = (p: PresetState) => {
+    setConfig(p.config);
+    if (p.inputs.amount !== undefined) setPromoAmt(String(p.inputs.amount));
+    if (p.inputs.conv !== undefined) setRefundConv(Number(p.inputs.conv));
+  };
   const finder = useGameFinder();
 
   const amt = parseFloat(promoAmt);
@@ -25,6 +27,7 @@ export default function RiskFreeFinder() {
   return (
     <FinderShell
       title="Risk Free Bet Finder"
+      presetBar={<PresetBar tool="riskfree" current={current} apply={apply} initialName={initialName} />}
       config={config}
       setConfig={setConfig}
       games={finder.games}
@@ -74,6 +77,7 @@ export default function RiskFreeFinder() {
               { label: "If win", value: `${winNet >= 0 ? "+" : ""}${fmt(winNet)}`, color: winNet >= 0 ? "var(--pos)" : "var(--neg)" },
               { label: "If lose (refund)", value: `${lossNet >= 0 ? "+" : ""}${fmt(lossNet)}`, color: lossNet >= 0 ? "var(--pos)" : "var(--neg)" },
             ]}
+            ticket={{ type: "Risk Free", amount: amt || 0, fixedStake: amt || 0, hedgeStake: Math.max(0, hedgeStake), expected: Math.min(winNet, lossNet), fixedNote: "risk-free bet" }}
             showHold={false}
           />
         );

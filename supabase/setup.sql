@@ -47,3 +47,17 @@ CREATE POLICY "anon full access movements" ON money_movements FOR ALL TO anon US
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE promos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE money_movements ENABLE ROW LEVEL SECURITY;
+
+-- Saved tool presets (also in supabase/presets.sql)
+CREATE TABLE IF NOT EXISTS presets (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  tool TEXT NOT NULL,           -- 'lowhold' | 'freebet' | 'riskfree' | 'boost'
+  name TEXT NOT NULL,
+  state JSONB NOT NULL,         -- { config, inputs }
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE presets ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "anon full access presets" ON presets;
+CREATE POLICY "anon full access presets" ON presets FOR ALL TO anon USING (true) WITH CHECK (true);
