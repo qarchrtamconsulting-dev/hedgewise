@@ -13,13 +13,14 @@ export default function RiskFreeFinder({ initial, initialName }: { initial?: Pre
   const [promoAmt, setPromoAmt] = useState<string>(String(start.inputs.amount ?? "500"));
   const [refundConv, setRefundConv] = useState<number>(Number(start.inputs.conv ?? 65));
   const [config, setConfig] = useState<FinderConfig>(start.config);
+  const finder = useGameFinder();
   const current: PresetState = { config, inputs: { amount: promoAmt, conv: refundConv } };
   const apply = (p: PresetState) => {
     setConfig(p.config);
     if (p.inputs.amount !== undefined) setPromoAmt(String(p.inputs.amount));
     if (p.inputs.conv !== undefined) setRefundConv(Number(p.inputs.conv));
+    finder.fetchGames(p.config);   // load games for the preset right away
   };
-  const finder = useGameFinder();
 
   const amt = parseFloat(promoAmt);
   const conv = refundConv / 100;

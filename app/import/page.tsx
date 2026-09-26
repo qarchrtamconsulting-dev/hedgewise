@@ -19,6 +19,8 @@ export default function ImportPage() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [replace, setReplace] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
 
   const pick = async (f: File | undefined) => {
     setErr(null); setDone(false); setLog([]); setFile(null);
@@ -37,6 +39,17 @@ export default function ImportPage() {
     setBusy(true); setErr(null); setLog([]);
     try {
       const db = await getDb();
+
+      if (replace) {
+        // Deleting clients cascades to their plays, bets, loan entries and payments.
+        say("Clearing existing clients and history…");
+        const ZERO = "00000000-0000-0000-0000-000000000000";
+        for (const t of ["settlements", "capital_movements", "legs", "plays", "clients"]) {
+          const { error } = await db.from(t).delete().neq("id", ZERO);
+          if (error) throw new Error(`Clearing ${t}: ${error.message}`);
+        }
+        say("Cleared.");
+      }
 
       // Match clients that already exist by name so nobody gets duplicated.
       const existing = await fetchAll<any>((a, b) => db.from("clients").select("id,name").range(a, b));
@@ -94,8 +107,20 @@ export default function ImportPage() {
             {r?.app_totals && <div>Profit {money0(r.app_totals.profit)} · your share {money0(r.app_totals.yours)} · client share {money0(r.app_totals.client)}</div>}
           </div>
         )}
+        <label className="tog" style={{ alignItems: "flex-start" }}>
+          <input type="checkbox" checked={replace} onChange={e => { setReplace(e.target.checked); setConfirmText(""); }} style={{ accentColor: "var(--neg)", marginTop: 3 }} />
+          <span style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.5 }}>
+            Replace everything: delete all current clients, plays, bets, loan entries and payments first, then load this file.
+          </span>
+        </label>
+        {replace && (
+          <div>
+            <span className="label">Type REPLACE to confirm</span>
+            <input className="input" value={confirmText} onChange={e => setConfirmText(e.target.value)} style={{ maxWidth: 220 }} />
+          </div>
+        )}
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button className="btn-primary" style={{ width: "auto" }} disabled={!file || busy} onClick={run}>{busy ? "Importing…" : "Import"}</button>
+          <button className="btn-primary" style={{ width: "auto" }} disabled={!file || busy || (replace && confirmText.trim().toUpperCase() !== "REPLACE")} onClick={run}>{busy ? "Importing…" : replace ? "Replace and import" : "Import"}</button>
           {done && <Link className="btn-ghost" href="/clients">Open clients</Link>}
         </div>
         <div className="hint" style={{ marginTop: 0 }}>Safe to run more than once. It only adds what is missing and never changes clients, plays or payments already in Hedgewise.</div>

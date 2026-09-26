@@ -4,10 +4,11 @@ import { useRouter } from "next/navigation";
 import { Client, ClientSummary, fetchAll, getDb, money0, pct, tone } from "@/lib/db";
 
 type Row = Client & ClientSummary & { balance: number };
-type SortKey = "name" | "state" | "split" | "open_plays" | "settled_plays" | "profit" | "your_share" | "received" | "balance" | "loan_outstanding" | "last_play";
+type SortKey = "status" | "name" | "state" | "split" | "open_plays" | "settled_plays" | "profit" | "your_share" | "received" | "balance" | "loan_outstanding" | "last_play";
 type Filter = "active" | "open" | "loan" | "all";
 
 const COLS: { key: SortKey; label: string; right?: boolean }[] = [
+  { key: "status", label: "Active" },
   { key: "name", label: "Client" },
   { key: "state", label: "State" },
   { key: "split", label: "Split", right: true },
@@ -16,7 +17,6 @@ const COLS: { key: SortKey; label: string; right?: boolean }[] = [
   { key: "profit", label: "Profit", right: true },
   { key: "your_share", label: "Your share", right: true },
   { key: "received", label: "Received", right: true },
-  { key: "balance", label: "Balance", right: true },
   { key: "loan_outstanding", label: "Loan out", right: true },
   { key: "last_play", label: "Last play", right: true },
 ];
@@ -26,7 +26,7 @@ export default function ClientsPage() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>("active");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "last_play", dir: -1 });
   const [adding, setAdding] = useState(false);
 
@@ -56,7 +56,7 @@ export default function ClientsPage() {
     if (!rows) return [];
     const needle = q.trim().toLowerCase();
     let r = rows.filter(c => !needle || c.name.toLowerCase().includes(needle) || (c.state || "").toLowerCase() === needle);
-    if (filter === "active") r = r.filter(c => (c.status || "active") === "active");
+    if (filter === "active") r = r.filter(c => c.status === "active");
     if (filter === "open") r = r.filter(c => c.open_plays > 0);
     if (filter === "loan") r = r.filter(c => Math.abs(c.loan_outstanding) > 0.5);
     const { key, dir } = sort;
@@ -68,6 +68,19 @@ export default function ClientsPage() {
       return (typeof x === "string" ? x.localeCompare(y) : x - y) * dir;
     });
   }, [rows, q, filter, sort]);
+
+  const toggleActive = async (c: Row) => {
+    const status = c.status === "active" ? "inactive" : "active";
+    setRows(rs => rs && rs.map(x => x.id === c.id ? { ...x, status } : x));
+    try {
+      const db = await getDb();
+      const { error } = await db.from("clients").update({ status }).eq("id", c.id);
+      if (error) throw error;
+    } catch (e: any) {
+      setRows(rs => rs && rs.map(x => x.id === c.id ? { ...x, status: c.status } : x));
+      setErr(e?.message || "Could not update client.");
+    }
+  };
 
   const totals = useMemo(() => view.reduce((t, c) => ({
     profit: t.profit + c.profit, yours: t.yours + c.your_share, received: t.received + c.received,
@@ -89,7 +102,7 @@ export default function ClientsPage() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <input className="input" placeholder="Search name or state" value={q} onChange={e => setQ(e.target.value)} style={{ width: 220 }} />
           <div className="tab-bar">
-            {([["all", "All"], ["active", "Active"], ["open", "Open plays"], ["loan", "Loan out"]] as const).map(([k, l]) => (
+            {([["active", "Active"], ["open", "Open plays"], ["loan", "Loan out"], ["all", "All"]] as const).map(([k, l]) => (
               <button key={k} className={`tab${filter === k ? " active" : ""}`} onClick={() => setFilter(k)}>{l}</button>
             ))}
           </div>
@@ -109,7 +122,7 @@ export default function ClientsPage() {
 
       {hasImported && (
         <div className="banner">
-          Imported history: payments in the sheet may include loan money returned along with your share, so balances on older plays can look overpaid. New plays and payments logged here are tracked separately.
+          "Received" on imported history is the sheet's "Amount client sent" column, which covers loan repayments and referral money, not just profit splits.
         </div>
       )}
 
@@ -125,7 +138,7 @@ export default function ClientsPage() {
               <tr>
                 {COLS.map(c => (
                   <th key={c.key} className={`sortable${c.right ? " r" : ""}`}
-                    onClick={() => setSort(s => ({ key: c.key, dir: s.key === c.key ? (s.dir === 1 ? -1 : 1) : (c.key === "name" || c.key === "state" ? 1 : -1) }))}>
+                    onClick={() => setSort(s => ({ key: c.key, dir: s.key === c.key ? (s.dir === 1 ? -1 : 1) : (c.key === "name" || c.key === "state" || c.key === "status" ? 1 : -1) }))}>
                     {c.label}{sort.key === c.key ? (sort.dir === 1 ? " ↑" : " ↓") : ""}
                   </th>
                 ))}
@@ -134,7 +147,10 @@ export default function ClientsPage() {
             <tbody>
               {view.map(c => (
                 <tr key={c.id} className="clickable" onClick={() => router.push(`/clients/${c.id}`)}>
-                  <td style={{ fontWeight: 500 }}>{c.name}{c.status && c.status !== "active" && <span className="status" style={{ marginLeft: 8 }}>{c.status}</span>}</td>
+                  <td onClick={e => { e.stopPropagation(); toggleActive(c); }} style={{ width: 56 }}>
+                    <input type="checkbox" checked={c.status === "active"} readOnly style={{ accentColor: "var(--accent)", cursor: "pointer", width: 15, height: 15 }} aria-label={`${c.name} active`} />
+                  </td>
+                  <td style={{ fontWeight: 500 }}>{c.name}</td>
                   <td style={{ color: "var(--text-2)" }}>{c.state || "—"}</td>
                   <td className="r">{c.split != null ? pct(c.split) : "—"}</td>
                   <td className="r" style={{ color: c.open_plays ? "var(--warn)" : "var(--muted)" }}>{c.open_plays}</td>
@@ -142,7 +158,6 @@ export default function ClientsPage() {
                   <td className="r" style={{ color: tone(c.profit) }}>{money0(c.profit)}</td>
                   <td className="r">{money0(c.your_share)}</td>
                   <td className="r" style={{ color: "var(--text-2)" }}>{money0(c.received)}</td>
-                  <td className="r" style={{ color: tone(c.balance) }}>{money0(c.balance)}</td>
                   <td className="r" style={{ color: Math.abs(c.loan_outstanding) > 0.5 ? "var(--text)" : "var(--muted)" }}>{money0(c.loan_outstanding)}</td>
                   <td className="r" style={{ color: "var(--text-2)" }}>{c.last_play || "—"}</td>
                 </tr>

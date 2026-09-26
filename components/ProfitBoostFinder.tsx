@@ -13,14 +13,15 @@ export default function ProfitBoostFinder({ initial, initialName }: { initial?: 
   const [boostPct, setBoostPct] = useState<string>(String(start.inputs.boost ?? "25"));
   const [maxBoostCap, setMaxBoostCap] = useState<string>(String(start.inputs.cap ?? "50"));
   const [config, setConfig] = useState<FinderConfig>(start.config);
+  const finder = useGameFinder();
   const current: PresetState = { config, inputs: { stake: stake, boost: boostPct, cap: maxBoostCap } };
   const apply = (p: PresetState) => {
     setConfig(p.config);
     if (p.inputs.stake !== undefined) setStake(String(p.inputs.stake));
     if (p.inputs.boost !== undefined) setBoostPct(String(p.inputs.boost));
     if (p.inputs.cap !== undefined) setMaxBoostCap(String(p.inputs.cap));
+    finder.fetchGames(p.config);   // load games for the preset right away
   };
-  const finder = useGameFinder();
 
   const s = parseFloat(stake);
   const b = parseFloat(boostPct) / 100;

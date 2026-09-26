@@ -12,12 +12,13 @@ export default function FreeBetFinder({ initial, initialName }: { initial?: Pres
   const start = initial || defaultPreset("freebet");
   const [freeBetAmt, setFreeBetAmt] = useState<string>(String(start.inputs.amount ?? "500"));
   const [config, setConfig] = useState<FinderConfig>(start.config);
+  const finder = useGameFinder();
   const current: PresetState = { config, inputs: { amount: freeBetAmt } };
   const apply = (p: PresetState) => {
     setConfig(p.config);
     if (p.inputs.amount !== undefined) setFreeBetAmt(String(p.inputs.amount));
+    finder.fetchGames(p.config);   // load games for the preset right away
   };
-  const finder = useGameFinder();
 
   const fb = parseFloat(freeBetAmt);
 

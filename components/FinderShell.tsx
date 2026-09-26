@@ -33,9 +33,18 @@ export default function FinderShell({
   return (
     <div className="grid-2col" style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 20, alignItems: "start" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <div style={{ padding: "2px 2px 4px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "2px 2px 4px" }}>
           <div className="section-title" style={{ fontSize: 15 }}>{title}</div>
+          <button className="btn-primary" onClick={onFetch} disabled={loading} style={{ width: "auto", padding: "8px 16px" }}>
+            {loading ? "Fetching…" : "Find games"}
+          </button>
         </div>
+        {error && <div style={{ color: "var(--neg)", fontSize: 12, lineHeight: 1.5 }}>{error}</div>}
+        {callsLeft && (
+          <div className="num" style={{ color: "var(--muted)", fontSize: 11, marginTop: -4 }}>
+            {callsLeft} API calls left{cached ? " · cached" : ""}
+          </div>
+        )}
 
         {presetBar}
 
@@ -66,16 +75,6 @@ export default function FinderShell({
           </div>
         </div>
 
-        <button className="btn-primary" onClick={onFetch} disabled={loading}>
-          {loading ? "Fetching…" : "Find games"}
-        </button>
-
-        {error && <div style={{ color: "var(--neg)", fontSize: 12, lineHeight: 1.5 }}>{error}</div>}
-        {callsLeft && (
-          <div className="num" style={{ color: "var(--muted)", fontSize: 11 }}>
-            {callsLeft} API calls left{cached ? " · cached" : ""}
-          </div>
-        )}
       </div>
 
       <div>

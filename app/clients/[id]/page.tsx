@@ -70,10 +70,20 @@ export default function ClientPage({ params }: { params: { id: string } }) {
           <div>
             <h1 className="page-title">{client.name}</h1>
             <p className="page-sub">
-              {[client.state, client.phone, client.split != null ? `${pct(client.split)} client split` : null, client.status && client.status !== "active" ? client.status : null].filter(Boolean).join(" · ") || "No details yet"}
+              {[client.state, client.phone, client.split != null ? `${pct(client.split)} client split` : null, client.status === "active" ? "Active" : "Inactive"].filter(Boolean).join(" · ") || "No details yet"}
             </p>
           </div>
-          <button className="btn-ghost" onClick={() => setEditing(e => !e)}>{editing ? "Close" : "Edit client"}</button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <label className="tog">
+              <input type="checkbox" checked={client.status === "active"} onChange={async e => {
+                const status = e.target.checked ? "active" : "inactive";
+                setClient({ ...client, status });
+                (await getDb()).from("clients").update({ status }).eq("id", client.id).then(() => {});
+              }} style={{ accentColor: "var(--accent)" }} />
+              <span style={{ color: "var(--text-2)", fontSize: 13 }}>Active</span>
+            </label>
+            <button className="btn-ghost" onClick={() => setEditing(e => !e)}>{editing ? "Close" : "Edit client"}</button>
+          </div>
         </div>
       </div>
 
@@ -84,7 +94,7 @@ export default function ClientPage({ params }: { params: { id: string } }) {
         <Kpi label="Client share" value={money(stats.clientShare)} />
         <Kpi label="Your share" value={money(stats.yours)} />
         <Kpi label="Received" value={money(stats.received)} />
-        <Kpi label="Balance owed" value={money(stats.balance)} color={tone(stats.balance)} />
+        <Kpi label="Open plays" value={String(stats.open)} />
         <Kpi label="Loan outstanding" value={money(stats.loan)} />
       </div>
 
@@ -146,7 +156,7 @@ function EditClient({ client, onSaved }: { client: Client; onSaved: () => void }
         <div>
           <span className="label">Status</span>
           <select className="input" value={f.status} onChange={set("status")}>
-            <option value="active">Active</option><option value="paused">Paused</option><option value="done">Done</option>
+            <option value="active">Active</option><option value="inactive">Inactive</option>
           </select>
         </div>
         <div><span className="label">Referred by</span><input className="input" value={f.referred_by} onChange={set("referred_by")} /></div>
@@ -166,6 +176,32 @@ function EditClient({ client, onSaved }: { client: Client; onSaved: () => void }
       </div>
     </div>
   );
+}
+
+
+/**
+ * Self hedge loan math: the stake went on the loan when the bet was placed.
+ * If your self hedge wins, the whole payout comes off the loan; if it loses, the loan stays.
+ * A void refunds the stake. Only applies to plays whose self hedge was logged here
+ * (imported plays already have their loan baked into the opening balance).
+ */
+async function syncSelfHedgeReturns(db: any, play: Play, legs: Leg[], results: Record<string, Leg["result"]> | null) {
+  const { data: stakes } = await db.from("capital_movements").select("id").eq("play_id", play.id).eq("type", "self_hedge_stake");
+  if (!stakes || stakes.length === 0) return;
+  await db.from("capital_movements").delete().eq("play_id", play.id).eq("type", "self_hedge_return");
+  if (!results) return;
+  const rows = legs.filter(l => l.self_hedge).flatMap(l => {
+    const r = results[l.id];
+    const amount = r === "won" ? Number(l.payout) : r === "void" ? Number(l.cash_stake) : 0;
+    return amount > 0 ? [{
+      client_id: play.client_id, play_id: play.id, type: "self_hedge_return", amount: Math.round(amount * 100) / 100,
+      date: today(), notes: `${l.book || "Self hedge"} ${r === "won" ? "won" : "voided"}${l.selection ? `: ${l.selection}` : ""}`,
+    }] : [];
+  });
+  if (rows.length) {
+    const { error } = await db.from("capital_movements").insert(rows);
+    if (error) throw error;
+  }
 }
 
 // ─── Plays ─────────────────────────────────────────────────────
@@ -262,9 +298,11 @@ function PlayDetail({ play, legs, client, reload }: { play: Play; legs: Leg[]; c
     setBusy(true); setErr(null);
     try {
       const db = await getDb();
+      const results: Record<string, Leg["result"]> = {};
       for (const l of legs) {
         const w = winners[l.seq];
         const result = w === "void" ? "void" : l.side === w ? "won" : "lost";
+        results[l.id] = result;
         if (result !== l.result) {
           const { error } = await db.from("legs").update({ result }).eq("id", l.id);
           if (error) throw error;
@@ -274,6 +312,7 @@ function PlayDetail({ play, legs, client, reload }: { play: Play; legs: Leg[]; c
       if (legs.length === 0) patch.profit_override = parseFloat(profitManual) || 0;
       const { error } = await db.from("plays").update(patch).eq("id", play.id);
       if (error) throw error;
+      await syncSelfHedgeReturns(db, play, legs, results);
       reload();
     } catch (e: any) { setErr(e?.message || "Could not settle."); }
     setBusy(false);
@@ -284,11 +323,16 @@ function PlayDetail({ play, legs, client, reload }: { play: Play; legs: Leg[]; c
     const db = await getDb();
     if (status === "open") await db.from("legs").update({ result: "pending" }).eq("play_id", play.id);
     await db.from("plays").update({ status, settled_on: null }).eq("id", play.id);
+    // Reopen: undo any self-hedge payout; void: refund the self-hedge stake.
+    const voided: Record<string, Leg["result"]> = {};
+    legs.forEach(l => { voided[l.id] = "void"; });
+    await syncSelfHedgeReturns(db, play, legs, status === "void" ? voided : null);
     setBusy(false); reload();
   };
 
   const remove = async () => {
     const db = await getDb();
+    await db.from("capital_movements").delete().eq("play_id", play.id);   // drop its loan entries too
     await db.from("plays").delete().eq("id", play.id);
     reload();
   };
@@ -406,6 +450,14 @@ function AddPlay({ clientId, onDone }: { clientId: string; onDone: () => void })
       if (rows.length) {
         const { error: e2 } = await db.from("legs").insert(rows);
         if (e2) throw e2;
+      }
+      const selfStake = rows.filter(r => r.self_hedge).reduce((t, r) => t + r.cash_stake, 0);
+      if (selfStake > 0) {
+        const { error: e3 } = await db.from("capital_movements").insert({
+          client_id: clientId, play_id: data!.id, type: "self_hedge_stake", amount: selfStake, date: f.date,
+          notes: f.promo.trim() ? `Self hedge: ${f.promo.trim()}` : "Self hedge",
+        });
+        if (e3) throw e3;
       }
       onDone();
     } catch (e: any) { setErr(e?.message || "Could not save."); setBusy(false); }

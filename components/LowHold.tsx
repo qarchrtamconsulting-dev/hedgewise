@@ -12,12 +12,13 @@ export default function LowHoldFinder({ initial, initialName }: { initial?: Pres
   const start = initial || defaultPreset("lowhold");
   const [cashSize, setCashSize] = useState<string>(String(start.inputs.cash ?? "100"));
   const [config, setConfig] = useState<FinderConfig>(start.config);
+  const finder = useGameFinder();
   const current: PresetState = { config, inputs: { cash: cashSize } };
   const apply = (p: PresetState) => {
     setConfig(p.config);
     if (p.inputs.cash !== undefined) setCashSize(String(p.inputs.cash));
+    finder.fetchGames(p.config);   // load games for the preset right away
   };
-  const finder = useGameFinder();
   const cash = parseFloat(cashSize);
 
   return (

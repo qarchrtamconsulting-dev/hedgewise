@@ -53,7 +53,7 @@ export default function PresetBar({ tool, current, apply, initialName }: Props) 
       <div>
         <span className="label">Preset</span>
         <select className="input" value={selected} onChange={e => choose(e.target.value)}>
-          <option value="">{initialName ? `Shared: ${initialName}` : "Choose a preset"}</option>
+          <option value="">{initialName ? `Shared: ${initialName}` : "Choose a preset to load games"}</option>
           {saved.length > 0 && (
             <optgroup label="Saved">
               {saved.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -68,7 +68,7 @@ export default function PresetBar({ tool, current, apply, initialName }: Props) 
       {naming ? (
         <div style={{ display: "flex", gap: 6 }}>
           <input
-            className="input" autoFocus placeholder="Preset name" value={name}
+            className="input" autoFocus placeholder="Name this preset" value={name}
             onChange={e => setName(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") doSave(); if (e.key === "Escape") setNaming(false); }}
           />
@@ -76,7 +76,7 @@ export default function PresetBar({ tool, current, apply, initialName }: Props) 
         </div>
       ) : (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <button className="btn-ghost" onClick={() => setNaming(true)}>Save current</button>
+          <button className="btn-ghost" onClick={() => setNaming(true)}>New preset</button>
           <button className="btn-ghost" onClick={copyLink}>Copy link</button>
           {active && !active.builtIn && (
             <button className="btn-ghost" onClick={() => { remove(active.id); setSelected(""); notify("Preset deleted"); }}>Delete</button>
