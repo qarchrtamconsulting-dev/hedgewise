@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { usePresets } from "./usePresets";
 import { Preset, PresetState, ToolKey, shareUrl } from "@/lib/presets";
+import { copyText } from "@/lib/clipboard";
 
 interface Props {
   tool: ToolKey;
@@ -39,12 +40,11 @@ export default function PresetBar({ tool, current, apply, initialName }: Props) 
 
   const copyLink = async () => {
     const url = shareUrl(tool, current, active?.name || initialName);
-    try {
-      await navigator.clipboard.writeText(url);
+    if (await copyText(url)) {
       notify("Link copied");
-    } catch {
+    } else {
       window.history.replaceState(null, "", url);
-      notify("Link is in the address bar");
+      notify("Couldn't copy. The link is in the address bar");
     }
   };
 

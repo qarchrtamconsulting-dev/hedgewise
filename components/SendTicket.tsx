@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FinderGame } from "./useGameFinder";
 import { fmt } from "@/lib/constants";
+import { copyText } from "@/lib/clipboard";
 
 export interface Ticket {
   /** Promo type logged to the client's sheet, e.g. "Free Bet" */
@@ -23,10 +24,13 @@ async function db() {
   return supabase;
 }
 
+// "sms:NUMBER?&body=TEXT" is the form both iPhone and Mac Messages accept.
 const smsHref = (phone: string | null | undefined, body: string) => {
-  const digits = (phone || "").replace(/[^\d+]/g, "");
-  return `sms:${digits}&body=${encodeURIComponent(body)}`;
+  let digits = (phone || "").replace(/[^\d+]/g, "");
+  if (/^\d{10}$/.test(digits)) digits = `+1${digits}`;
+  return `sms:${digits}?&body=${encodeURIComponent(body)}`;
 };
+
 
 export function buildMessage(game: FinderGame, fixedBook: string, t: Ticket, firstName?: string) {
   const when = new Date(game.commence);
@@ -55,6 +59,8 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
   const [body, setBody] = useState("");
   const [edited, setEdited] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [loggedFor, setLoggedFor] = useState<string | null>(null);
+  const boxRef = useRef<HTMLTextAreaElement | null>(null);
 
   const client = useMemo(() => clients?.find(c => c.id === clientId), [clients, clientId]);
   const firstName = client?.name.split(" ")[0];
@@ -81,6 +87,8 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
 
   const logPlay = async () => {
     if (!client || !log) return true;
+    if (loggedFor === client.id) return true; // don't double-log if Messages is opened twice
+    setLoggedFor(client.id);
     try {
       const { error } = await (await db()).from("promos").insert({
         client_id: client.id,
@@ -93,21 +101,22 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
         notes: `${game.away} at ${game.home} | ${fixedBookName} ${game.fixedTeam} ${game.fixedAmerican} ${fmt(ticket.fixedStake)} / ${game.hedgeBookName} ${game.hedgeTeam} ${game.hedgeAmerican} ${fmt(ticket.hedgeStake)}`,
       });
       if (error) throw error;
+      setStatus(`Logged to ${client.name}`);
       return true;
     } catch (e: any) {
+      setLoggedFor(null);
       setStatus(`Couldn't log to ${client.name}: ${e?.message || "database error"}`);
       return false;
     }
   };
 
-  const sendText = async () => {
-    await logPlay();
-    window.location.href = smsHref(client?.phone, body);
-    if (client && log) setStatus(`Logged to ${client.name}`);
-  };
+  // Messages opens from a real link click (browsers block app launches that
+  // happen after an await); logging runs in the background.
+  const onOpenMessages = () => { void logPlay(); };
 
   const copy = async () => {
-    try { await navigator.clipboard.writeText(body); setStatus("Message copied"); } catch { setStatus("Copy failed"); }
+    const ok = await copyText(body, boxRef.current);
+    setStatus(ok ? "Message copied" : "Text selected. Press Cmd+C to copy");
   };
 
   if (!open) {
@@ -135,6 +144,7 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
       <div>
         <span className="label">Message</span>
         <textarea
+          ref={boxRef}
           className="input" rows={9} value={body}
           onChange={e => { setBody(e.target.value); setEdited(true); }}
           style={{ resize: "vertical", fontSize: 13, lineHeight: 1.5 }}
@@ -142,9 +152,10 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
       </div>
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-        <button className="btn-primary" style={{ width: "auto", padding: "8px 14px" }} onClick={sendText}>
+        <a className="btn-primary" style={{ width: "auto", padding: "8px 14px", display: "inline-block" }}
+           href={smsHref(client?.phone, body)} onClick={onOpenMessages}>
           Open in Messages
-        </button>
+        </a>
         <button className="btn-ghost" onClick={copy}>Copy text</button>
         {edited && <button className="btn-ghost" onClick={() => setEdited(false)}>Reset</button>}
         <button className="btn-ghost" onClick={() => { setOpen(false); setStatus(null); }}>Close</button>
