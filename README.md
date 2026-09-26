@@ -37,9 +37,9 @@ git push -u origin main
 3. In **Environment Variables**, add these three:
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://ueueajalybkbjbjubieo.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGc... (your anon key)
-ODDS_API_KEY=6ff3bfc6d9d7e54f2c66bf6010d3c5b3
+ODDS_API_KEY=your_odds_api_key
 ```
 
 4. Click **Deploy**
