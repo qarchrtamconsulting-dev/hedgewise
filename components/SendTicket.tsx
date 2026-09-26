@@ -42,7 +42,7 @@ export function buildMessage(game: FinderGame, fixedBook: string, t: Ticket, fir
   const date = when.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
   const time = when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const lines = [
-    `${firstName ? `Hey ${firstName}, ` : ""}here's your next play.`,
+    firstName ? `Hey ${firstName}, here's your next play.` : "Here's your next play.",
     `${game.away} at ${game.home} · ${date} ${time}`,
     "",
     `${twoLegs ? "1) " : ""}${fixedBook}: ${game.fixedTeam} ${game.fixedAmerican}. Bet ${fmt(t.fixedStake)}${t.fixedNote ? ` (${t.fixedNote})` : ""}`,

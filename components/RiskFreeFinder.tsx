@@ -50,7 +50,8 @@ export default function RiskFreeFinder({ initial, initialName }: { initial?: Pre
           <Slider label="Refund conversion" value={refundConv} set={setRefundConv} />
         </>
       }
-      renderGame={(g) => {
+      score={(g) => { const w = g.fixedDecimal - 1; const h = (w - conv + 1) / g.hedgeDecimal; return -Math.min(w - h, conv - 1 + h * (g.hedgeDecimal - 1)); }}
+      renderGame={(g, rank) => {
         // Risk free math:
         // Win scenario: stake real $amt at fixed odds → profit = amt*(d1-1), but hedge loses
         // Loss scenario: get refund worth amt*conv as bonus, hedge wins
@@ -71,15 +72,18 @@ export default function RiskFreeFinder({ initial, initialName }: { initial?: Pre
           <GameCard
             key={g.id}
             game={g}
+            rank={rank}
             fixedBookName={config.fixedBook}
-            stats={[
-              { label: "Real stake", value: fmt(amt || 0) },
-              { label: "Hedge stake", value: fmt(Math.max(0, hedgeStake)) },
-              { label: "If win", value: `${winNet >= 0 ? "+" : ""}${fmt(winNet)}`, color: winNet >= 0 ? "var(--pos)" : "var(--neg)" },
-              { label: "If lose (refund)", value: `${lossNet >= 0 ? "+" : ""}${fmt(lossNet)}`, color: lossNet >= 0 ? "var(--pos)" : "var(--neg)" },
+            fixedStake={amt || 0}
+            hedgeStake={Math.max(0, hedgeStake)}
+            fixedTag="Risk-free"
+            metric={{ label: "Locked in", value: `${Math.min(winNet, lossNet) >= 0 ? "+" : "−"}$${Math.abs(Math.min(winNet, lossNet)).toFixed(2)}`, tone: Math.min(winNet, lossNet) >= 0 ? "pos" : "neg" }}
+            outcomes={[
+              { label: `${g.fixedTeam} win`, value: winNet },
+              { label: `${g.hedgeTeam} win (refund)`, value: lossNet },
             ]}
+            details={[{ label: "Refund valued at", value: `${refundConv}%` }]}
             ticket={{ type: "Risk Free", amount: amt || 0, fixedStake: amt || 0, hedgeStake: Math.max(0, hedgeStake), expected: Math.min(winNet, lossNet), fixedNote: "risk-free bet", fixedPayout: (amt || 0) * g.fixedDecimal, hedgePayout: Math.max(0, hedgeStake) * g.hedgeDecimal }}
-            showHold={false}
           />
         );
       }}

@@ -68,7 +68,7 @@ export default function TopBar() {
     <header className="topbar">
       <Link href="/" className="brand">
         <span className="brand-mark" />
-        Hedgewise
+        <span className="brand-name">Hedgewise</span>
       </Link>
       <nav className="nav">
         {LINKS.map(l => (

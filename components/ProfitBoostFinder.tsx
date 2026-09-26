@@ -62,7 +62,8 @@ export default function ProfitBoostFinder({ initial, initialName }: { initial?: 
           </div>
         </div>
       }
-      renderGame={(g) => {
+      score={(g) => { const base = s * (g.fixedDecimal - 1); const pay = s + base + Math.min(base * b, cap); return -(pay - pay / g.hedgeDecimal - s); }}
+      renderGame={(g, rank) => {
         // Boost math:
         // Real bet at boosted effective odds. Boosted profit = min(stake*(d-1)*boost, cap)
         // Effective payout = stake + stake*(d-1) + boostedExtra
@@ -77,15 +78,19 @@ export default function ProfitBoostFinder({ initial, initialName }: { initial?: 
           <GameCard
             key={g.id}
             game={g}
+            rank={rank}
             fixedBookName={config.fixedBook}
-            stats={[
-              { label: "Stake", value: fmt(s || 0) },
-              { label: "Boosted odds", value: toAm(boostedDecimal) },
-              { label: "Hedge stake", value: fmt(hedgeStake) },
-              { label: "Guaranteed profit", value: fmt(guaranteed), color: "var(--pos)" },
+            fixedStake={s || 0}
+            hedgeStake={hedgeStake}
+            fixedTag="Boosted"
+            fixedOddsNote={`Boosted to ${toAm(boostedDecimal)}`}
+            metric={{ label: "Locked profit", value: `${guaranteed >= 0 ? "+" : "−"}$${Math.abs(guaranteed).toFixed(2)}`, tone: guaranteed >= 0 ? "pos" : "neg" }}
+            outcomes={[
+              { label: `${g.fixedTeam} win`, value: guaranteed },
+              { label: `${g.hedgeTeam} win`, value: guaranteed },
             ]}
+            details={[{ label: "Hold", value: `${g.hold.toFixed(2)}%` }]}
             ticket={{ type: "Profit Boost", amount: s || 0, fixedStake: s || 0, hedgeStake, expected: guaranteed, fixedNote: "apply your profit boost", fixedPayout: boostedPayout, hedgePayout: hedgeStake * g.hedgeDecimal }}
-            showHold={false}
           />
         );
       }}

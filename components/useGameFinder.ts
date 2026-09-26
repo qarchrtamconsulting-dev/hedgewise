@@ -17,6 +17,7 @@ export interface FinderGame {
   hold: number;
   fixedLink?: string;
   hedgeLink?: string;
+  league?: string;
 }
 
 export interface FinderConfig {
@@ -117,6 +118,7 @@ export function useGameFinder() {
         hedgeBookKey: best.hk,
         hold: best.h,
         fixedLink: best.fLink, hedgeLink: best.hLink,
+        league: Object.entries(LEAGUE_SPORT).find(([, v]) => v === game.sport_key)?.[0],
       };
     }).filter(Boolean) as FinderGame[];
 

@@ -6,7 +6,7 @@ import { useGameFinder, FinderConfig } from "./useGameFinder";
 import { USDInput } from "./ui";
 import PresetBar from "./PresetBar";
 import { PresetState, defaultPreset } from "@/lib/presets";
-import { fmt } from "@/lib/constants";
+import { fmt, holdColor } from "@/lib/constants";
 
 export default function LowHoldFinder({ initial, initialName }: { initial?: PresetState; initialName?: string }) {
   const start = initial || defaultPreset("lowhold");
@@ -43,30 +43,30 @@ export default function LowHoldFinder({ initial, initialName }: { initial?: Pres
           </div>
         </div>
       }
-      renderGame={(g) => {
+      score={(g) => g.hold}
+      renderGame={(g, rank) => {
         // Low hold: fixed-book stake is the input; hedge is sized so both outcomes pay the same.
         const stake = cash || 0;
         const hedgeStake = (stake * g.fixedDecimal) / g.hedgeDecimal;
         const fixedNet = stake * (g.fixedDecimal - 1) - hedgeStake;
         const hedgeNet = hedgeStake * (g.hedgeDecimal - 1) - stake;
         const totalWagered = stake + hedgeStake;
-        const signed = (n: number) => `${n >= 0 ? "+" : "-"}${fmt(n)}`;
-        const tone = (n: number) => (n >= 0 ? "var(--pos)" : "var(--neg)");
 
         return (
           <GameCard
             key={g.id}
             game={g}
+            rank={rank}
             fixedBookName={config.fixedBook}
-            stats={[
-              { label: `${config.fixedBook || "Fixed"} stake`, value: fmt(stake) },
-              { label: "Hedge stake", value: fmt(hedgeStake) },
-              { label: "Total wagered", value: fmt(totalWagered) },
-              { label: "If fixed wins", value: signed(fixedNet), color: tone(fixedNet) },
-              { label: "If hedge wins", value: signed(hedgeNet), color: tone(hedgeNet) },
+            fixedStake={stake}
+            hedgeStake={hedgeStake}
+            metric={{ label: "Hold", value: `${g.hold.toFixed(2)}%`, color: holdColor(g.hold) }}
+            outcomes={[
+              { label: `${g.fixedTeam} win`, value: fixedNet },
+              { label: `${g.hedgeTeam} win`, value: hedgeNet },
             ]}
+            details={[{ label: "Total wagered", value: fmt(totalWagered) }]}
             ticket={{ type: "Low Hold", amount: stake, fixedStake: stake, hedgeStake, expected: Math.min(fixedNet, hedgeNet), fixedPayout: stake * g.fixedDecimal, hedgePayout: hedgeStake * g.hedgeDecimal }}
-            showHold={true}
           />
         );
       }}

@@ -44,7 +44,8 @@ export default function FreeBetFinder({ initial, initialName }: { initial?: Pres
           </div>
         </div>
       }
-      renderGame={(g) => {
+      score={(g) => -((g.fixedDecimal - 1) - (g.fixedDecimal - 1) / g.hedgeDecimal)}
+      renderGame={(g, rank) => {
         // Free bet math: profit if FB wins = fb * (decimal - 1). Hedge = profit / hedge_decimal.
         const fbProfit = fb * (g.fixedDecimal - 1);
         const hedgeStake = fbProfit / g.hedgeDecimal;
@@ -55,15 +56,18 @@ export default function FreeBetFinder({ initial, initialName }: { initial?: Pres
           <GameCard
             key={g.id}
             game={g}
+            rank={rank}
             fixedBookName={config.fixedBook}
-            stats={[
-              { label: "Free bet", value: fmt(fb || 0) },
-              { label: "Hedge stake", value: fmt(hedgeStake) },
-              { label: "Guaranteed profit", value: fmt(guaranteed), color: "var(--pos)" },
-              { label: "Conversion", value: `${conversion.toFixed(1)}%` },
+            fixedStake={fb || 0}
+            hedgeStake={hedgeStake}
+            fixedTag="Free bet"
+            metric={{ label: "Conversion", value: `${conversion.toFixed(1)}%`, tone: conversion >= 65 ? "pos" : conversion >= 55 ? "warn" : "neg" }}
+            outcomes={[
+              { label: `${g.fixedTeam} win`, value: guaranteed },
+              { label: `${g.hedgeTeam} win`, value: guaranteed },
             ]}
+            details={[{ label: "Hold", value: `${g.hold.toFixed(2)}%` }]}
             ticket={{ type: "Free Bet", amount: fb || 0, fixedStake: fb || 0, hedgeStake, expected: guaranteed, fixedNote: "use your free bet", fixedIsCredit: true, fixedPayout: fbProfit, hedgePayout: hedgeStake * g.hedgeDecimal }}
-            showHold={false}
           />
         );
       }}

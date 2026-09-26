@@ -21,14 +21,17 @@ interface Props {
   presetBar?: ReactNode;
   /** Custom controls (top of left panel) — promo amount input, sliders, etc */
   inputs?: ReactNode;
-  /** Per-game render (right panel) — receives game and renders the math */
-  renderGame: (g: FinderGame) => ReactNode;
+  /** Per-game render (right panel) — receives game and its rank */
+  renderGame: (g: FinderGame, rank: number) => ReactNode;
+  /** Best games first: lower score ranks higher (default: hold) */
+  score?: (g: FinderGame) => number;
 }
 
 export default function FinderShell({
-  title, presetBar, config, setConfig, games, loading, error, updated, callsLeft, cached, onFetch, inputs, renderGame,
+  title, presetBar, config, setConfig, games: rawGames, loading, error, updated, callsLeft, cached, onFetch, inputs, renderGame, score,
 }: Props) {
   const set = (patch: Partial<FinderConfig>) => setConfig({ ...config, ...patch });
+  const games = score ? [...rawGames].sort((a, b) => score(a) - score(b)) : rawGames;
 
   // After a search, fold the settings away and show only the games.
   // Back (button, browser back, or phone swipe) brings the settings back.
@@ -69,8 +72,8 @@ export default function FinderShell({
       {loading && games.length === 0 && (
         <div className="card" style={{ textAlign: "center", padding: "48px 20px", color: "var(--muted)", fontSize: 13 }}>Finding games…</div>
       )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {games.map(g => renderGame(g))}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {games.map((g, i) => renderGame(g, i + 1))}
       </div>
     </>
   );
@@ -78,11 +81,11 @@ export default function FinderShell({
   if (showResults) {
     const summary = [config.fixedBook, config.leagues.join(", "), `${config.fixedMinAmerican} to ${config.fixedMaxAmerican}`].filter(Boolean).join(" · ");
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 1040, margin: "0 auto", width: "100%" }}>
         <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", position: "sticky", top: 60, zIndex: 5, padding: "10px 14px" }}>
           <button className="btn-ghost" onClick={back} style={{ fontSize: 13, padding: "6px 12px" }}>← Back</button>
           <div style={{ flex: 1, minWidth: 180 }}>
-            <div className="section-title">{title}{games.length > 0 ? ` · ${games.length} games` : ""}</div>
+            <div className="section-title">{title}{games.length > 0 ? ` · ${games.length} game${games.length === 1 ? "" : "s"}` : ""}</div>
             <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 2 }}>
               {summary}{updated ? ` · updated ${updated}` : ""}{callsLeft ? ` · ${callsLeft} API calls left` : ""}
             </div>
@@ -146,7 +149,7 @@ export default function FinderShell({
 
       <div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12, minHeight: 22 }}>
-          <div className="section-title">{games.length > 0 ? `${games.length} games` : "Results"}</div>
+          <div className="section-title">{games.length > 0 ? `${games.length} game${games.length === 1 ? "" : "s"}` : "Results"}</div>
           {updated && <span style={{ color: "var(--muted)", fontSize: 12 }}>Updated {updated}</span>}
         </div>
 
