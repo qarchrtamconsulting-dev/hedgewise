@@ -79,9 +79,9 @@ export const OFFERS: Offer[] = [
     link: "https://apps.apple.com/us/app/hollywood-casino-real-money/id6736526782" },
 ];
 
-// Online casino is only legal in a handful of states. Among your clients' states: NJ, PA and CT yes; VA, NC, NY, MA no.
+// States where your casino offers can be run. Among your clients' states: NJ and PA yes; VA, NC, NY, MA, CT no.
 // Adjust here if a state's rules change or a book isn't live somewhere.
-export const CASINO_STATES = new Set(["NJ", "PA", "CT", "MI", "WV", "DE", "RI"]);
+export const CASINO_STATES = new Set(["NJ", "PA", "MI", "WV", "DE", "RI"]);
 
 export function offersFor(state: string | null | undefined): Offer[] {
   const st = (state || "").toUpperCase();
