@@ -2,11 +2,34 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { getDb } from "@/lib/db";
 
 const LINKS = [
   { href: "/tools", label: "Tools" },
   { href: "/clients", label: "Clients" },
+  { href: "/import", label: "Import" },
 ];
+
+function SignOut() {
+  const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+    (async () => {
+      try {
+        const db = await getDb();
+        const { data } = await db.auth.getSession();
+        setSignedIn(!!data.session);
+        const { data: sub } = db.auth.onAuthStateChange((_e, s) => setSignedIn(!!s));
+        unsub = () => sub.subscription.unsubscribe();
+      } catch {}
+    })();
+    return () => unsub?.();
+  }, []);
+  if (!signedIn) return null;
+  return (
+    <button className="btn-ghost" onClick={async () => { (await getDb()).auth.signOut(); }}>Sign out</button>
+  );
+}
 
 function ThemeToggle() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -54,7 +77,10 @@ export default function TopBar() {
           </Link>
         ))}
       </nav>
-      <ThemeToggle />
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <SignOut />
+        <ThemeToggle />
+      </div>
     </header>
   );
 }

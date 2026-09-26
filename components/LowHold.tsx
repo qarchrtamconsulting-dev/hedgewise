@@ -64,7 +64,7 @@ export default function LowHoldFinder({ initial, initialName }: { initial?: Pres
               { label: "If fixed wins", value: signed(fixedNet), color: tone(fixedNet) },
               { label: "If hedge wins", value: signed(hedgeNet), color: tone(hedgeNet) },
             ]}
-            ticket={{ type: "Low Hold", amount: stake, fixedStake: stake, hedgeStake, expected: Math.min(fixedNet, hedgeNet) }}
+            ticket={{ type: "Low Hold", amount: stake, fixedStake: stake, hedgeStake, expected: Math.min(fixedNet, hedgeNet), fixedPayout: stake * g.fixedDecimal, hedgePayout: hedgeStake * g.hedgeDecimal }}
             showHold={true}
           />
         );

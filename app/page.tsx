@@ -2,7 +2,7 @@ import Link from "next/link";
 
 const SECTIONS = [
   { href: "/tools", title: "Tools", body: "Low hold, free bet, risk free and profit boost finders with live odds." },
-  { href: "/clients", title: "Clients", body: "Roster, promo tracking, grading and payment splits." },
+  { href: "/clients", title: "Clients", body: "Roster, plays, settlements, loan ledger and payments." },
 ];
 
 export default function Home() {

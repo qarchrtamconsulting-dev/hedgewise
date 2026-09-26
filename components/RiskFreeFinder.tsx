@@ -77,7 +77,7 @@ export default function RiskFreeFinder({ initial, initialName }: { initial?: Pre
               { label: "If win", value: `${winNet >= 0 ? "+" : ""}${fmt(winNet)}`, color: winNet >= 0 ? "var(--pos)" : "var(--neg)" },
               { label: "If lose (refund)", value: `${lossNet >= 0 ? "+" : ""}${fmt(lossNet)}`, color: lossNet >= 0 ? "var(--pos)" : "var(--neg)" },
             ]}
-            ticket={{ type: "Risk Free", amount: amt || 0, fixedStake: amt || 0, hedgeStake: Math.max(0, hedgeStake), expected: Math.min(winNet, lossNet), fixedNote: "risk-free bet" }}
+            ticket={{ type: "Risk Free", amount: amt || 0, fixedStake: amt || 0, hedgeStake: Math.max(0, hedgeStake), expected: Math.min(winNet, lossNet), fixedNote: "risk-free bet", fixedPayout: (amt || 0) * g.fixedDecimal, hedgePayout: Math.max(0, hedgeStake) * g.hedgeDecimal }}
             showHold={false}
           />
         );

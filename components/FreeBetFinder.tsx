@@ -61,7 +61,7 @@ export default function FreeBetFinder({ initial, initialName }: { initial?: Pres
               { label: "Guaranteed profit", value: fmt(guaranteed), color: "var(--pos)" },
               { label: "Conversion", value: `${conversion.toFixed(1)}%` },
             ]}
-            ticket={{ type: "Free Bet", amount: fb || 0, fixedStake: fb || 0, hedgeStake, expected: guaranteed, fixedNote: "use your free bet" }}
+            ticket={{ type: "Free Bet", amount: fb || 0, fixedStake: fb || 0, hedgeStake, expected: guaranteed, fixedNote: "use your free bet", fixedIsCredit: true, fixedPayout: fbProfit, hedgePayout: hedgeStake * g.hedgeDecimal }}
             showHold={false}
           />
         );

@@ -83,7 +83,7 @@ export default function ProfitBoostFinder({ initial, initialName }: { initial?: 
               { label: "Hedge stake", value: fmt(hedgeStake) },
               { label: "Guaranteed profit", value: fmt(guaranteed), color: "var(--pos)" },
             ]}
-            ticket={{ type: "Profit Boost", amount: s || 0, fixedStake: s || 0, hedgeStake, expected: guaranteed, fixedNote: "apply your profit boost" }}
+            ticket={{ type: "Profit Boost", amount: s || 0, fixedStake: s || 0, hedgeStake, expected: guaranteed, fixedNote: "apply your profit boost", fixedPayout: boostedPayout, hedgePayout: hedgeStake * g.hedgeDecimal }}
             showHold={false}
           />
         );

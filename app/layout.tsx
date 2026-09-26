@@ -1,5 +1,6 @@
 import "./globals.css";
 import TopBar from "@/components/TopBar";
+import AuthGate from "@/components/AuthGate";
 
 export const metadata = {
   title: "Hedgewise",
@@ -17,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <TopBar />
-        <main className="page">{children}</main>
+        <main className="page"><AuthGate>{children}</AuthGate></main>
       </body>
     </html>
   );

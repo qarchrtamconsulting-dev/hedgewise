@@ -1,218 +1,208 @@
 "use client";
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
-import { BOOKS, PROMO_TYPES, STAGES, fmt } from "@/lib/constants";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Client, ClientSummary, fetchAll, getDb, money0, pct, tone } from "@/lib/db";
 
-interface Promo {
-  id: string; client_id: string; book: string; type: string;
-  amount: number; status: string; profit: number; date: string; notes: string;
-}
-interface Client {
-  id: string; name: string; phone: string; books: string[];
-  loan_balance: number; total_profit: number; promos?: Promo[];
-}
+type Row = Client & ClientSummary & { balance: number };
+type SortKey = "name" | "state" | "split" | "open_plays" | "settled_plays" | "profit" | "your_share" | "received" | "balance" | "loan_outstanding" | "last_play";
+type Filter = "active" | "open" | "loan" | "all";
 
-const statusColor = (s:string) => ({"Active":"var(--warn)","Graded - Win":"var(--pos)","Graded - Loss":"var(--neg)","Withdrawn":"var(--accent)","Pending":"var(--accent)","Flagged":"var(--warn)"} as any)[s] || "var(--muted)";
-const tag = {background:"transparent",border:"1px solid var(--border)",borderRadius:4,color:"var(--muted)",fontSize:10,padding:"2px 7px",cursor:"pointer"};
+const COLS: { key: SortKey; label: string; right?: boolean }[] = [
+  { key: "name", label: "Client" },
+  { key: "state", label: "State" },
+  { key: "split", label: "Split", right: true },
+  { key: "open_plays", label: "Open", right: true },
+  { key: "settled_plays", label: "Settled", right: true },
+  { key: "profit", label: "Profit", right: true },
+  { key: "your_share", label: "Your share", right: true },
+  { key: "received", label: "Received", right: true },
+  { key: "balance", label: "Balance", right: true },
+  { key: "loan_outstanding", label: "Loan out", right: true },
+  { key: "last_play", label: "Last play", right: true },
+];
 
 export default function ClientsPage() {
-  const [clients,setClients] = useState<Client[]>([]);
-  const [loading,setLoading] = useState(true);
-  const [sel,setSel] = useState<string|null>(null);
-  const [showAdd,setShowAdd] = useState(false);
-  const [showPromo,setShowPromo] = useState(false);
-  const [nc,setNc] = useState({name:"",phone:"",books:[] as string[],loan_balance:""});
-  const [np,setNp] = useState({book:"FanDuel",type:"Free Bet",amount:"",status:"Active",profit:"",date:new Date().toISOString().split("T")[0],notes:""});
-  const [queue,setQueue] = useState<{type:string;msg:string}[]>([]);
-  const [dbError,setDbError] = useState<string|null>(null);
+  const router = useRouter();
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "last_play", dir: -1 });
+  const [adding, setAdding] = useState(false);
 
   const load = async () => {
-    setLoading(true);
-    const { data: cs, error: e1 } = await supabase.from("clients").select("*").order("name");
-    const { data: ps, error: e2 } = await supabase.from("promos").select("*").order("date", {ascending:false});
-    if (e1 || e2) setDbError((e1?.message || e2?.message) || "Database error");
-    if (cs) setClients(cs.map(c => ({...c, promos: ps?.filter((p:Promo) => p.client_id === c.id) || []})));
-    setLoading(false);
+    try {
+      const db = await getDb();
+      const [clients, sums] = await Promise.all([
+        fetchAll<Client>((a, b) => db.from("clients").select("id,name,phone,email,state,split,status,referred_by,notes,approved_books").order("name").range(a, b)),
+        fetchAll<ClientSummary>((a, b) => db.from("client_summary").select("*").range(a, b)),
+      ]);
+      const byId = new Map(sums.map(s => [s.client_id, s]));
+      setRows(clients.map(c => {
+        const s = byId.get(c.id) || ({ open_plays: 0, settled_plays: 0, profit: 0, client_share: 0, your_share: 0, received: 0, loan_outstanding: 0, last_play: null } as any);
+        const n = (x: any) => Number(x) || 0;
+        return { ...c, ...s, profit: n(s.profit), client_share: n(s.client_share), your_share: n(s.your_share), received: n(s.received), loan_outstanding: n(s.loan_outstanding), open_plays: n(s.open_plays), settled_plays: n(s.settled_plays), balance: n(s.your_share) - n(s.received) };
+      }));
+    } catch (e: any) {
+      const m = e?.message || String(e);
+      setErr(/client_summary|does not exist|schema cache/i.test(m)
+        ? "The tracker tables aren't set up yet. Run supabase/tracker.sql in the Supabase SQL Editor, then refresh."
+        : m);
+    }
   };
-
   useEffect(() => { load(); }, []);
 
-  const addClient = async () => {
-    if (!nc.name) return;
-    const { error } = await supabase.from("clients").insert({
-      name: nc.name, phone: nc.phone, books: nc.books,
-      loan_balance: parseFloat(nc.loan_balance) || 0, total_profit: 0,
+  const view = useMemo(() => {
+    if (!rows) return [];
+    const needle = q.trim().toLowerCase();
+    let r = rows.filter(c => !needle || c.name.toLowerCase().includes(needle) || (c.state || "").toLowerCase() === needle);
+    if (filter === "active") r = r.filter(c => (c.status || "active") === "active");
+    if (filter === "open") r = r.filter(c => c.open_plays > 0);
+    if (filter === "loan") r = r.filter(c => Math.abs(c.loan_outstanding) > 0.5);
+    const { key, dir } = sort;
+    return [...r].sort((a, b) => {
+      const x = (a as any)[key], y = (b as any)[key];
+      if (x == null && y == null) return 0;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return (typeof x === "string" ? x.localeCompare(y) : x - y) * dir;
     });
-    if (error) { setDbError(error.message); return; }
-    setNc({name:"",phone:"",books:[],loan_balance:""});
-    setShowAdd(false);
-    load();
-  };
+  }, [rows, q, filter, sort]);
 
-  const addPromo = async (cid: string) => {
-    const { error } = await supabase.from("promos").insert({
-      client_id: cid, book: np.book, type: np.type,
-      amount: parseFloat(np.amount) || 0, status: np.status,
-      profit: parseFloat(np.profit) || 0, date: np.date, notes: np.notes,
-    });
-    if (error) { setDbError(error.message); return; }
-    setNp({book:"FanDuel",type:"Free Bet",amount:"",status:"Active",profit:"",date:new Date().toISOString().split("T")[0],notes:""});
-    setShowPromo(false);
-    load();
-  };
+  const totals = useMemo(() => view.reduce((t, c) => ({
+    profit: t.profit + c.profit, yours: t.yours + c.your_share, received: t.received + c.received,
+    loan: t.loan + c.loan_outstanding, open: t.open + c.open_plays,
+  }), { profit: 0, yours: 0, received: 0, loan: 0, open: 0 }), [view]);
 
-  const grade = async (cid: string, pid: string, outcome: "win"|"loss") => {
-    const status = outcome === "win" ? "Graded - Win" : "Graded - Loss";
-    const { error } = await supabase.from("promos").update({ status }).eq("id", pid);
-    if (error) { setDbError(error.message); return; }
-    const client = clients.find(c => c.id === cid);
-    const promo = client?.promos?.find(p => p.id === pid);
-    if (client && promo) setQueue(outcome === "win" ? [
-      {type:"text",msg:`Text ${client.name}: "Your ${promo.book} promo landed! Withdraw ${promo.profit ? fmt(promo.profit) : "funds"}"`},
-      {type:"next",msg:`Next: Move ${client.name} to next book in sequence`},
-    ] : [
-      {type:"text",msg:`Text ${client.name}: "Refund incoming — watch for bonus cash in your ${promo.book} account"`},
-      {type:"monitor",msg:`Monitor ${client.name}'s ${promo.book} account for bonus credit (24–48hrs)`},
-    ]);
-    load();
-  };
+  if (err) return <div className="banner" style={{ color: "var(--neg)" }}>{err}</div>;
+  if (!rows) return <div style={{ color: "var(--muted)", padding: 24 }}>Loading clients…</div>;
 
-  const sc = sel ? clients.find(c => c.id === sel) : null;
-
-  if (loading) return <div style={{padding:40,color:"var(--muted)"}}>Loading clients…</div>;
+  const hasImported = rows.some(r => r.settled_plays > 0);
 
   return (
-    <div>
-      {dbError && <div className="card" style={{borderColor:"var(--neg)",marginBottom:16,color:"var(--neg)"}}>
-        Database error: {dbError}. Make sure the SQL setup has been run in Supabase (see README).
-      </div>}
-
-      <div className="grid-2col" style={{display:"grid",gridTemplateColumns:sc?"280px 1fr":"360px",gap:16}}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
         <div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <span style={{color:"var(--muted)",fontSize:11,letterSpacing:0.3,textTransform:"uppercase"}}>Clients · {clients.length}</span>
-            <button className="btn-ghost" onClick={()=>setShowAdd(!showAdd)} >Add client</button>
-          </div>
-
-          {showAdd && (
-            <div className="card" style={{marginBottom:10}}>
-              {([["Full name","name"],["Phone","phone"],["Loan balance $","loan_balance"]] as const).map(([ph,k])=>(
-                <input key={k} className="input" placeholder={ph} value={(nc as any)[k]} onChange={e=>setNc(p=>({...p,[k]:e.target.value}))} style={{marginBottom:8}} />
-              ))}
-              <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:10}}>
-                {BOOKS.map(b=>(
-                  <button key={b} className="btn" onClick={()=>setNc(p=>({...p,books:p.books.includes(b)?p.books.filter(x=>x!==b):[...p.books,b]}))}
-                    style={{...tag,borderColor:nc.books.includes(b)?"var(--accent)":"var(--border)",color:nc.books.includes(b)?"var(--accent)":"var(--muted)",background:nc.books.includes(b)?"var(--accent-soft)":"transparent"}}>
-                    {b}
-                  </button>
-                ))}
-              </div>
-              <button className="btn-primary" onClick={addClient}>Save Client</button>
-            </div>
-          )}
-
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {clients.length === 0 && !showAdd && <div style={{color:"var(--muted)",fontSize:13,textAlign:"center",padding:24}}>No clients yet</div>}
-            {clients.map(c=>(
-              <div key={c.id} className="card" onClick={()=>setSel(c.id===sel?null:c.id)}
-                style={{cursor:"pointer",borderColor:c.id===sel?"var(--border)":"var(--border)",background:c.id===sel?"var(--accent-soft)":"var(--surface)"}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                  <div>
-                    <div style={{color:"var(--text)",fontWeight:600,fontSize:14}}>{c.name}</div>
-                    <div style={{color:"var(--muted)",fontSize:11,marginTop:2}}>{c.phone}</div>
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{color:"var(--pos)",fontWeight:600}}>+{fmt(c.total_profit)}</div>
-                    <div style={{color:"var(--neg)",fontSize:11}}>Loan: {fmt(c.loan_balance)}</div>
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                  {(c.books||[]).map(b=><span key={b} style={tag}>{b}</span>)}
-                </div>
-              </div>
+          <h1 className="page-title">Clients</h1>
+          <p className="page-sub">{view.length} of {rows.length} clients</p>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <input className="input" placeholder="Search name or state" value={q} onChange={e => setQ(e.target.value)} style={{ width: 220 }} />
+          <div className="tab-bar">
+            {([["all", "All"], ["active", "Active"], ["open", "Open plays"], ["loan", "Loan out"]] as const).map(([k, l]) => (
+              <button key={k} className={`tab${filter === k ? " active" : ""}`} onClick={() => setFilter(k)}>{l}</button>
             ))}
           </div>
+          <button className="btn-primary" style={{ width: "auto" }} onClick={() => setAdding(a => !a)}>Add client</button>
         </div>
+      </div>
 
-        {sc && (
-          <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div>
-                <div style={{color:"var(--text)",fontWeight:600,fontSize:18}}>{sc.name}</div>
-                <div style={{color:"var(--muted)",fontSize:12,marginTop:2}}>
-                  {sc.phone} · Loan: <span style={{color:"var(--neg)"}}>{fmt(sc.loan_balance)}</span> · Profit: <span style={{color:"var(--pos)"}}>+{fmt(sc.total_profit)}</span>
-                </div>
-              </div>
-              <button className="btn-ghost" onClick={()=>setShowPromo(!showPromo)} >Add promo</button>
-            </div>
+      {adding && <AddClient onDone={(id) => { setAdding(false); if (id) router.push(`/clients/${id}`); else load(); }} />}
 
-            {showPromo && (
-              <div className="card" style={{marginBottom:12}}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                  <select className="input" value={np.book} onChange={e=>setNp(p=>({...p,book:e.target.value}))}>{BOOKS.map(b=><option key={b}>{b}</option>)}</select>
-                  <select className="input" value={np.type} onChange={e=>setNp(p=>({...p,type:e.target.value}))}>{PROMO_TYPES.map(t=><option key={t}>{t}</option>)}</select>
-                  <input className="input" placeholder="Promo amount $" value={np.amount} onChange={e=>setNp(p=>({...p,amount:e.target.value}))} />
-                  <input className="input" placeholder="Locked profit $" value={np.profit} onChange={e=>setNp(p=>({...p,profit:e.target.value}))} />
-                  <input className="input" type="date" value={np.date} onChange={e=>setNp(p=>({...p,date:e.target.value}))} />
-                  <select className="input" value={np.status} onChange={e=>setNp(p=>({...p,status:e.target.value}))}>{STAGES.map(s=><option key={s}>{s}</option>)}</select>
-                </div>
-                <input className="input" placeholder="Notes (e.g. +200/-235 conversion)" value={np.notes} onChange={e=>setNp(p=>({...p,notes:e.target.value}))} style={{marginBottom:8}} />
-                <button className="btn-primary" onClick={()=>addPromo(sc.id)}>Save Promo</button>
-              </div>
-            )}
+      <div className="kpis">
+        <Kpi label="Profit" value={money0(totals.profit)} />
+        <Kpi label="Your share" value={money0(totals.yours)} />
+        <Kpi label="Received" value={money0(totals.received)} />
+        <Kpi label="Loan outstanding" value={money0(totals.loan)} />
+        <Kpi label="Open plays" value={String(totals.open)} />
+      </div>
 
-            {queue.length>0 && (
-              <div className="card" style={{borderColor:"var(--border)",marginBottom:12}}>
-                <div style={{color:"var(--text)",fontWeight:600,fontSize:11,letterSpacing:0.3,textTransform:"uppercase",marginBottom:10}}>Action queue</div>
-                {queue.map((a,i)=>(
-                  <div key={i} style={{display:"flex",gap:8,marginBottom:7}}>
-                    <span style={{color:"var(--muted)",fontSize:11,textTransform:"uppercase",letterSpacing:0.3,minWidth:56}}>{a.type==="text"?"Text":a.type==="next"?"Next":"Watch"}</span>
-                    <span style={{color:"var(--text-2)",fontSize:12,lineHeight:1.5}}>{a.msg}</span>
-                  </div>
+      {hasImported && (
+        <div className="banner">
+          Imported history: payments in the sheet may include loan money returned along with your share, so balances on older plays can look overpaid. New plays and payments logged here are tracked separately.
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <div className="card" style={{ textAlign: "center", padding: 48, borderStyle: "dashed" }}>
+          <div style={{ color: "var(--text-2)" }}>No clients yet</div>
+          <div className="hint">Add one above, or bring in your spreadsheet from the Import page.</div>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="data">
+            <thead>
+              <tr>
+                {COLS.map(c => (
+                  <th key={c.key} className={`sortable${c.right ? " r" : ""}`}
+                    onClick={() => setSort(s => ({ key: c.key, dir: s.key === c.key ? (s.dir === 1 ? -1 : 1) : (c.key === "name" || c.key === "state" ? 1 : -1) }))}>
+                    {c.label}{sort.key === c.key ? (sort.dir === 1 ? " ↑" : " ↓") : ""}
+                  </th>
                 ))}
-                <button className="btn-ghost" onClick={()=>setQueue([])} style={{marginTop:6}}>Clear</button>
-              </div>
-            )}
-
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {(!sc.promos || sc.promos.length===0) && <div style={{color:"var(--border)",fontSize:13,textAlign:"center",padding:32}}>No promos yet</div>}
-              {sc.promos?.map(p=>(
-                <div key={p.id} className="card" style={{borderColor:statusColor(p.status)+"33"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                    <div>
-                      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:3}}>
-                        <span style={{color:"var(--text)",fontWeight:600}}>{p.book}</span>
-                        <span style={{...tag,borderColor:statusColor(p.status),color:statusColor(p.status)}}>{p.status}</span>
-                      </div>
-                      <div style={{color:"var(--muted)",fontSize:12}}>{p.type} · {fmt(p.amount)} · {p.date}</div>
-                      {p.notes && <div style={{color:"var(--muted)",fontSize:11,marginTop:2}}>{p.notes}</div>}
-                    </div>
-                    <div style={{textAlign:"right"}}>
-                      {p.profit>0 && <div style={{color:"var(--pos)",fontWeight:600,marginBottom:4}}>+{fmt(p.profit)}</div>}
-                      {p.status==="Active" && (
-                        <div style={{display:"flex",gap:4}}>
-                          <button className="btn-ghost" onClick={()=>grade(sc.id,p.id,"win")} style={{borderColor:"var(--pos)",color:"var(--pos)"}}>Win</button>
-                          <button className="btn-ghost" onClick={()=>grade(sc.id,p.id,"loss")} style={{borderColor:"var(--neg)",color:"var(--neg)"}}>Loss</button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+              </tr>
+            </thead>
+            <tbody>
+              {view.map(c => (
+                <tr key={c.id} className="clickable" onClick={() => router.push(`/clients/${c.id}`)}>
+                  <td style={{ fontWeight: 500 }}>{c.name}{c.status && c.status !== "active" && <span className="status" style={{ marginLeft: 8 }}>{c.status}</span>}</td>
+                  <td style={{ color: "var(--text-2)" }}>{c.state || "—"}</td>
+                  <td className="r">{c.split != null ? pct(c.split) : "—"}</td>
+                  <td className="r" style={{ color: c.open_plays ? "var(--warn)" : "var(--muted)" }}>{c.open_plays}</td>
+                  <td className="r" style={{ color: "var(--text-2)" }}>{c.settled_plays}</td>
+                  <td className="r" style={{ color: tone(c.profit) }}>{money0(c.profit)}</td>
+                  <td className="r">{money0(c.your_share)}</td>
+                  <td className="r" style={{ color: "var(--text-2)" }}>{money0(c.received)}</td>
+                  <td className="r" style={{ color: tone(c.balance) }}>{money0(c.balance)}</td>
+                  <td className="r" style={{ color: Math.abs(c.loan_outstanding) > 0.5 ? "var(--text)" : "var(--muted)" }}>{money0(c.loan_outstanding)}</td>
+                  <td className="r" style={{ color: "var(--text-2)" }}>{c.last_play || "—"}</td>
+                </tr>
               ))}
-            </div>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
-            {sc.total_profit > 0 && (
-              <div className="card" style={{marginTop:12,borderColor:"var(--border)"}}>
-                <div style={{color:"var(--text)",fontWeight:600,fontSize:11,letterSpacing:0.3,textTransform:"uppercase",marginBottom:12}}>Payment split (60/40)</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,textAlign:"center"}}>
-                  <div><div style={{color:"var(--text)",fontWeight:600,fontSize:20}}>{fmt(sc.total_profit)}</div><div style={{color:"var(--muted)",fontSize:11}}>Total</div></div>
-                  <div><div style={{color:"var(--accent)",fontWeight:600,fontSize:20}}>{fmt(sc.total_profit*0.6)}</div><div style={{color:"var(--muted)",fontSize:11}}>Your 60%</div></div>
-                  <div><div style={{color:"var(--pos)",fontWeight:600,fontSize:20}}>{fmt(sc.total_profit*0.4)}</div><div style={{color:"var(--muted)",fontSize:11}}>Client 40%</div></div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+function Kpi({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="kpi">
+      <div className="stat-label">{label}</div>
+      <div className="kpi-value">{value}</div>
+    </div>
+  );
+}
+
+function AddClient({ onDone }: { onDone: (id?: string) => void }) {
+  const [f, setF] = useState({ name: "", phone: "", email: "", state: "", split: "35", referred_by: "" });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const set = (k: keyof typeof f) => (e: any) => setF(p => ({ ...p, [k]: e.target.value }));
+
+  const save = async () => {
+    if (!f.name.trim()) { setErr("Name is required."); return; }
+    setBusy(true); setErr(null);
+    try {
+      const db = await getDb();
+      const { data, error } = await db.from("clients").insert({
+        name: f.name.trim(), phone: f.phone.trim() || null, email: f.email.trim() || null,
+        state: f.state.trim().toUpperCase() || null, split: (parseFloat(f.split) || 0) / 100,
+        referred_by: f.referred_by.trim() || null, status: "active", books: [],
+      }).select("id").single();
+      if (error) throw error;
+      onDone(data?.id);
+    } catch (e: any) {
+      setErr(e?.message || "Could not save.");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div className="section-title">New client</div>
+      <div className="form-grid">
+        <div><span className="label">Name</span><input className="input" value={f.name} onChange={set("name")} autoFocus /></div>
+        <div><span className="label">Phone</span><input className="input" value={f.phone} onChange={set("phone")} inputMode="tel" /></div>
+        <div><span className="label">Email</span><input className="input" value={f.email} onChange={set("email")} /></div>
+        <div><span className="label">State</span><input className="input" value={f.state} onChange={set("state")} maxLength={2} placeholder="VA" /></div>
+        <div><span className="label">Client split %</span><input className="input num" value={f.split} onChange={set("split")} inputMode="decimal" /></div>
+        <div><span className="label">Referred by</span><input className="input" value={f.referred_by} onChange={set("referred_by")} /></div>
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <button className="btn-primary" style={{ width: "auto" }} onClick={save} disabled={busy}>{busy ? "Saving…" : "Save client"}</button>
+        <button className="btn-ghost" onClick={() => onDone()}>Cancel</button>
+        {err && <span style={{ color: "var(--neg)", fontSize: 12 }}>{err}</span>}
       </div>
     </div>
   );
