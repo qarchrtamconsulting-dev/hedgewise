@@ -6,6 +6,7 @@ import {
   fetchAll, getDb, money, pct, today, tone,
 } from "@/lib/db";
 import { BOOKS } from "@/lib/constants";
+import Onboarding from "@/components/Onboarding";
 
 const ALL_BOOKS = [...BOOKS, "theScore Bet", "ESPN Bet"];
 
@@ -23,7 +24,7 @@ export default function ClientPage({ params }: { params: { id: string } }) {
   const [moves, setMoves] = useState<Movement[]>([]);
   const [setts, setSetts] = useState<Settlement[]>([]);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<"plays" | "ledger">("plays");
+  const [tab, setTab] = useState<"plays" | "onboarding" | "ledger">("plays");
   const [editing, setEditing] = useState(false);
 
   const load = useCallback(async () => {
@@ -37,7 +38,7 @@ export default function ClientPage({ params }: { params: { id: string } }) {
         fetchAll<Settlement>((a, b) => db.from("settlements").select("*").eq("client_id", id).order("date", { ascending: false }).range(a, b)),
       ]);
       if (c.error) throw c.error;
-      setClient(c.data as Client); setPlays(p); setLegs(l); setMoves(m); setSetts(s);
+      setClient(prev => { if (!prev && (c.data as any)?.status === "onboarding") setTab("onboarding"); return c.data as Client; }); setPlays(p); setLegs(l); setMoves(m); setSetts(s);
     } catch (e: any) {
       setErr(e?.message || String(e));
     }
@@ -70,7 +71,7 @@ export default function ClientPage({ params }: { params: { id: string } }) {
           <div>
             <h1 className="page-title">{client.name}</h1>
             <p className="page-sub">
-              {[client.state, client.phone, client.split != null ? `${pct(client.split)} client split` : null, client.status === "active" ? "Active" : "Inactive"].filter(Boolean).join(" · ") || "No details yet"}
+              {[client.state, client.phone, client.split != null ? `${pct(client.split)} client split` : null, client.status === "active" ? "Active" : client.status === "onboarding" ? "Onboarding" : "Inactive"].filter(Boolean).join(" · ") || "No details yet"}
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -101,12 +102,13 @@ export default function ClientPage({ params }: { params: { id: string } }) {
 
       <div className="tab-bar" style={{ alignSelf: "flex-start" }}>
         <button className={`tab${tab === "plays" ? " active" : ""}`} onClick={() => setTab("plays")}>Plays · {plays.length}</button>
+        <button className={`tab${tab === "onboarding" ? " active" : ""}`} onClick={() => setTab("onboarding")}>Onboarding</button>
         <button className={`tab${tab === "ledger" ? " active" : ""}`} onClick={() => setTab("ledger")}>Loan and payments</button>
       </div>
 
-      {tab === "plays"
-        ? <Plays client={client} plays={plays} legsBy={legsBy} reload={load} />
-        : <Ledger client={client} moves={moves} setts={setts} loan={stats.loan} reload={load} />}
+      {tab === "plays" && <Plays client={client} plays={plays} legsBy={legsBy} reload={load} />}
+      {tab === "onboarding" && <Onboarding client={client} />}
+      {tab === "ledger" && <Ledger client={client} moves={moves} setts={setts} loan={stats.loan} reload={load} />}
     </div>
   );
 }
@@ -157,7 +159,7 @@ function EditClient({ client, onSaved }: { client: Client; onSaved: () => void }
         <div>
           <span className="label">Status</span>
           <select className="input" value={f.status} onChange={set("status")}>
-            <option value="active">Active</option><option value="inactive">Inactive</option>
+            <option value="onboarding">Onboarding</option><option value="active">Active</option><option value="inactive">Inactive</option>
           </select>
         </div>
         <div><span className="label">Referred by</span><input className="input" value={f.referred_by} onChange={set("referred_by")} /></div>

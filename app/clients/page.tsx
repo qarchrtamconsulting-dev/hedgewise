@@ -2,10 +2,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Client, ClientSummary, fetchAll, getDb, money0, pct, tone } from "@/lib/db";
+import { Stage, nextOffer } from "@/lib/playbook";
 
-type Row = Client & ClientSummary & { balance: number; outstanding: number };
-type SortKey = "status" | "outstanding" | "name" | "state" | "split" | "open_plays" | "settled_plays" | "profit" | "your_share" | "received" | "balance" | "loan_outstanding" | "last_play";
-type Filter = "active" | "open" | "loan" | "all";
+type Row = Client & ClientSummary & { balance: number; outstanding: number; next_app: string | null };
+type SortKey = "next_app" | "status" | "outstanding" | "name" | "state" | "split" | "open_plays" | "settled_plays" | "profit" | "your_share" | "received" | "balance" | "loan_outstanding" | "last_play";
+type Filter = "active" | "onboarding" | "open" | "loan" | "all";
 
 const COLS: { key: SortKey; label: string; right?: boolean }[] = [
   { key: "status", label: "Active" },
@@ -19,6 +20,7 @@ const COLS: { key: SortKey; label: string; right?: boolean }[] = [
   { key: "received", label: "Received", right: true },
   { key: "loan_outstanding", label: "Loan", right: true },
   { key: "outstanding", label: "Outstanding", right: true },
+  { key: "next_app", label: "Next app" },
   { key: "last_play", label: "Last play", right: true },
 ];
 
@@ -39,12 +41,20 @@ export default function ClientsPage() {
         fetchAll<ClientSummary>((a, b) => db.from("client_summary").select("*").range(a, b)),
       ]);
       const byId = new Map(sums.map(s => [s.client_id, s]));
+      // Onboarding progress (table may not exist yet)
+      const booksBy = new Map<string, Record<string, Stage>>();
+      try {
+        const cb = await fetchAll<any>((a, b) => db.from("client_books").select("client_id,offer,stage").range(a, b));
+        cb.forEach(r => { const m = booksBy.get(r.client_id) || {}; m[r.offer] = r.stage; booksBy.set(r.client_id, m); });
+      } catch {}
       setRows(clients.map(c => {
         const s = byId.get(c.id) || ({ open_plays: 0, settled_plays: 0, profit: 0, client_share: 0, your_share: 0, received: 0, loan_outstanding: 0, last_play: null } as any);
         const n = (x: any) => Number(x) || 0;
         return { ...c, ...s, profit: n(s.profit), client_share: n(s.client_share), your_share: n(s.your_share), received: n(s.received), loan_outstanding: n(s.loan_outstanding), open_plays: n(s.open_plays), settled_plays: n(s.settled_plays), balance: n(s.your_share) - n(s.received),
           // What the client has out with you: loan fronted + your share they haven't sent yet (sheet: Total Loan + column AN)
-          outstanding: n(s.loan_outstanding) + n(s.your_share) - n(s.received) };
+          outstanding: n(s.loan_outstanding) + n(s.your_share) - n(s.received),
+          // Only meaningful once the checklist is in use (or they're onboarding); otherwise unknown
+          next_app: (booksBy.has(c.id) || c.status === "onboarding") ? (nextOffer(c.state, booksBy.get(c.id) || {})?.book || "All done") : null };
       }));
     } catch (e: any) {
       const m = e?.message || String(e);
@@ -60,6 +70,7 @@ export default function ClientsPage() {
     const needle = q.trim().toLowerCase();
     let r = rows.filter(c => !needle || c.name.toLowerCase().includes(needle) || (c.state || "").toLowerCase() === needle);
     if (filter === "active") r = r.filter(c => c.status === "active");
+    if (filter === "onboarding") r = r.filter(c => c.status === "onboarding");
     if (filter === "open") r = r.filter(c => c.open_plays > 0);
     if (filter === "loan") r = r.filter(c => c.outstanding > 0.5);
     const { key, dir } = sort;
@@ -106,7 +117,7 @@ export default function ClientsPage() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <input className="input" placeholder="Search name or state" value={q} onChange={e => setQ(e.target.value)} style={{ width: 220 }} />
           <div className="tab-bar">
-            {([["active", "Active"], ["open", "Open plays"], ["loan", "Owes you"], ["all", "All"]] as const).map(([k, l]) => (
+            {([["active", "Active"], ["onboarding", "Onboarding"], ["open", "Open plays"], ["loan", "Owes you"], ["all", "All"]] as const).map(([k, l]) => (
               <button key={k} className={`tab${filter === k ? " active" : ""}`} onClick={() => setFilter(k)}>{l}</button>
             ))}
           </div>
@@ -164,6 +175,7 @@ export default function ClientsPage() {
                   <td className="r" style={{ color: "var(--text-2)" }}>{money0(c.received)}</td>
                   <td className="r" style={{ color: Math.abs(c.loan_outstanding) > 0.5 ? "var(--text-2)" : "var(--muted)" }}>{money0(c.loan_outstanding)}</td>
                   <td className="r" style={{ fontWeight: 500, color: c.outstanding > 0.5 ? "var(--text)" : "var(--muted)" }}>{money0(c.outstanding)}</td>
+                  <td style={{ color: c.next_app ? "var(--text-2)" : "var(--muted)" }}>{c.next_app || "—"}</td>
                   <td className="r" style={{ color: "var(--text-2)" }}>{c.last_play || "—"}</td>
                 </tr>
               ))}
@@ -198,7 +210,7 @@ function AddClient({ onDone }: { onDone: (id?: string) => void }) {
       const { data, error } = await db.from("clients").insert({
         name: f.name.trim(), phone: f.phone.trim() || null, email: f.email.trim() || null,
         state: f.state.trim().toUpperCase() || null, split: (parseFloat(f.split) || 0) / 100,
-        referred_by: f.referred_by.trim() || null, status: "active", books: [],
+        referred_by: f.referred_by.trim() || null, status: "onboarding", books: [],
       }).select("id").single();
       if (error) throw error;
       onDone(data?.id);
