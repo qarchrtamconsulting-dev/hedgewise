@@ -1,7 +1,7 @@
 "use client";
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { CheckList, Toggle } from "./ui";
-import { BOOKS, LEAGUES } from "@/lib/constants";
+import { ODDS_BOOKS as BOOKS, LEAGUES } from "@/lib/constants";
 import { FinderConfig, FinderGame } from "./useGameFinder";
 
 interface Props {
@@ -126,6 +126,7 @@ export default function FinderShell({
             <option value="">Select a book</option>
             {BOOKS.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
+          <div className="hint">Bet365 isn't in the odds feed, so it can't be searched.</div>
         </div>
 
         <CheckList label="Leagues" options={LEAGUES} value={config.leagues} onChange={(v) => set({ leagues: v })} req />

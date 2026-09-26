@@ -9,7 +9,7 @@ import { BOOKS } from "@/lib/constants";
 import Onboarding from "@/components/Onboarding";
 import { settlePlay, syncSelfHedgeReturns } from "@/lib/settle";
 
-const ALL_BOOKS = [...BOOKS, "theScore Bet", "ESPN Bet"];
+const ALL_BOOKS = [...BOOKS, "ESPN Bet"];
 
 const smsHref = (phone: string | null | undefined, body: string) => {
   let digits = (phone || "").replace(/[^\d+]/g, "");

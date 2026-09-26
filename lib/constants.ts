@@ -1,11 +1,15 @@
-export const BOOKS = ["FanDuel","DraftKings","BetMGM","Caesars","Bet365","Hard Rock","BetRivers","Fanatics"];
+export const BOOKS = ["FanDuel","DraftKings","BetMGM","Caesars","theScore Bet","Bet365","Hard Rock","BetRivers","Fanatics"];
+/** Books the odds feed covers (The Odds API has no US Bet365 data). */
+export const ODDS_BOOKS = BOOKS.filter(b => b !== "Bet365");
 export const LEAGUES = ["NBA","MLB","NHL","NFL","NCAAB","NCAAF"];
 export const PROMO_TYPES = ["Free Bet","Risk Free","Profit Boost","Low Hold","Deposit Match","Reload","Refer-a-Friend","Odds Boost"];
 export const STAGES = ["Active","Pending","Graded - Win","Graded - Loss","Withdrawn","Flagged"];
 
+// The Odds API bookmaker keys -> our names. Caesars is listed as William Hill;
+// theScore Bet still uses its old ESPN BET key.
 export const BOOK_MAP: Record<string,string> = {
   fanduel:"FanDuel", draftkings:"DraftKings", betmgm:"BetMGM",
-  caesars:"Caesars", bet365:"Bet365", hardrockbet:"Hard Rock",
+  williamhill_us:"Caesars", espnbet:"theScore Bet", hardrockbet:"Hard Rock",
   betrivers:"BetRivers", fanatics:"Fanatics"
 };
 export const LEAGUE_SPORT: Record<string,string> = {

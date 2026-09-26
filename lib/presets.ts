@@ -31,7 +31,7 @@ export const BUILT_IN: Preset[] = [
   { id: "b-lh-fd", tool: "lowhold", name: "FanDuel min loss", config: cfg("FanDuel", "-200", "+200"), inputs: { cash: "500" }, builtIn: true },
   { id: "b-lh-dk", tool: "lowhold", name: "DraftKings min loss", config: cfg("DraftKings", "-200", "+200"), inputs: { cash: "500" }, builtIn: true },
   { id: "b-lh-mgm", tool: "lowhold", name: "BetMGM $1.5k", config: cfg("BetMGM", "-200", "+200"), inputs: { cash: "1500" }, builtIn: true },
-  { id: "b-lh-365", tool: "lowhold", name: "Bet365 $1k", config: cfg("Bet365", "-200", "+200"), inputs: { cash: "1000" }, builtIn: true },
+  { id: "b-lh-tsb", tool: "lowhold", name: "theScore Bet $1k", config: cfg("theScore Bet", "-200", "+200"), inputs: { cash: "1000" }, builtIn: true },
   { id: "b-lh-czr", tool: "lowhold", name: "Caesars $1k", config: cfg("Caesars", "-200", "+200"), inputs: { cash: "1000" }, builtIn: true },
 
   // Free bet
@@ -43,6 +43,8 @@ export const BUILT_IN: Preset[] = [
   // Risk free
   { id: "b-rf-fd500", tool: "riskfree", name: "FanDuel $500 risk free", config: cfg("FanDuel", "+200", "+1000"), inputs: { amount: "500", conv: 65 }, builtIn: true },
   { id: "b-rf-fd1k", tool: "riskfree", name: "FanDuel $1k risk free", config: cfg("FanDuel", "+200", "+1000"), inputs: { amount: "1000", conv: 65 }, builtIn: true },
+  { id: "b-rf-tsb1k", tool: "riskfree", name: "theScore Bet $1k risk free", config: cfg("theScore Bet", "+200", "+1000"), inputs: { amount: "1000", conv: 65 }, builtIn: true },
+  { id: "b-rf-mgm", tool: "riskfree", name: "BetMGM $1.5k risk free", config: cfg("BetMGM", "+200", "+1000"), inputs: { amount: "1500", conv: 65 }, builtIn: true },
   { id: "b-rf-br500", tool: "riskfree", name: "BetRivers $500 risk free", config: cfg("BetRivers", "+200", "+1000"), inputs: { amount: "500", conv: 65 }, builtIn: true },
 
   // Profit boost
