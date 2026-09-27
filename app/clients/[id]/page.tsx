@@ -8,6 +8,8 @@ import {
 import { BOOKS } from "@/lib/constants";
 import Onboarding from "@/components/Onboarding";
 import Receipt from "@/components/Receipt";
+import ClientOverview from "@/components/Journey";
+import { dayOn } from "@/lib/cadence";
 import { settlePlay, syncSelfHedgeReturns } from "@/lib/settle";
 
 const ALL_BOOKS = [...BOOKS, "ESPN Bet"];
@@ -87,10 +89,13 @@ export default function ClientPage({ params }: { params: { id: string } }) {
           <div>
             <h1 className="page-title">{client.name}</h1>
             <p className="page-sub">
-              {[client.state, startedOn ? `Started ${shortDate(startedOn)} · day ${fanDuelDay(startedOn)}` : "Not started (no FanDuel bet yet)", client.phone, client.split != null ? `${pct(client.split)} client split` : null, client.status === "active" ? "Active" : client.status === "onboarding" ? "Onboarding" : "Inactive"].filter(Boolean).join(" · ") || "No details yet"}
+              {[client.state, client.split != null ? `${pct(client.split)} split` : null, startedOn ? `started ${shortDate(startedOn)} · day ${fanDuelDay(startedOn)}` : "not started (no FanDuel bet yet)", client.referred_by ? `referred by ${client.referred_by}` : null, client.phone, client.status === "active" ? "Active" : client.status === "onboarding" ? "Onboarding" : "Inactive"].filter(Boolean).join(" · ") || "No details yet"}
             </p>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button className="btn-ghost" onClick={() => setTab("ledger")}>Log payment</button>
+            {client.phone && <a className="btn-ghost" href={smsHref(client.phone, "")}>Text {client.name.split(" ")[0]}</a>}
+            <Link className="btn-primary" style={{ width: "auto", padding: "7px 14px" }} href={`/tools?client=${client.id}`}>New play</Link>
             <label className="tog">
               <input type="checkbox" checked={client.status === "active"} onChange={async e => {
                 const status = e.target.checked ? "active" : "inactive";
@@ -106,15 +111,8 @@ export default function ClientPage({ params }: { params: { id: string } }) {
 
       {editing && <EditClient client={client} onSaved={() => { setEditing(false); load(); }} />}
 
-      <div className="kpis">
-        <Kpi label="Profit" value={money(stats.profit)} color={tone(stats.profit)} />
-        <Kpi label="Client share" value={money(stats.clientShare)} />
-        <Kpi label="Your share" value={money(stats.yours)} />
-        <Kpi label="Received" value={money(stats.received)} />
-        <Kpi label="Open plays" value={String(stats.open)} />
-        <Kpi label="Loan" value={money(stats.loan)} />
-        <Kpi label="Outstanding" value={money(stats.outstanding)} />
-      </div>
+      <ClientOverview client={client} plays={plays} legsBy={legsBy} stats={stats} startedOn={startedOn} today={today()}
+        onLogPayment={() => setTab("ledger")} onOpenOnboarding={() => setTab("onboarding")} />
 
       <div className="tab-bar" style={{ alignSelf: "flex-start" }}>
         <button className={`tab${tab === "plays" ? " active" : ""}`} onClick={() => setTab("plays")}>Plays · {plays.length}</button>
@@ -122,18 +120,9 @@ export default function ClientPage({ params }: { params: { id: string } }) {
         <button className={`tab${tab === "ledger" ? " active" : ""}`} onClick={() => setTab("ledger")}>Loan and payments</button>
       </div>
 
-      {tab === "plays" && <Plays client={client} plays={plays} legsBy={legsBy} reload={load} />}
+      {tab === "plays" && <Plays client={client} plays={plays} legsBy={legsBy} startedOn={startedOn} reload={load} />}
       {tab === "onboarding" && <Onboarding client={client} />}
       {tab === "ledger" && <Ledger client={client} moves={moves} setts={setts} loan={stats.loan} reload={load} />}
-    </div>
-  );
-}
-
-function Kpi({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="kpi">
-      <div className="stat-label">{label}</div>
-      <div className="kpi-value" style={{ color: color || "var(--text)" }}>{value}</div>
     </div>
   );
 }
@@ -200,7 +189,7 @@ function EditClient({ client, onSaved }: { client: Client; onSaved: () => void }
 
 
 // ─── Plays ─────────────────────────────────────────────────────
-function Plays({ client, plays, legsBy, reload }: { client: Client; plays: Play[]; legsBy: Map<string, Leg[]>; reload: () => void }) {
+function Plays({ client, plays, legsBy, startedOn, reload }: { client: Client; plays: Play[]; legsBy: Map<string, Leg[]>; startedOn: string | null; reload: () => void }) {
   const [filter, setFilter] = useState<"open" | "settled" | "all">(plays.some(p => p.status === "open" || p.status === "sent") ? "open" : "all");
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -228,7 +217,7 @@ function Plays({ client, plays, legsBy, reload }: { client: Client; plays: Play[
         <table className="data">
           <thead>
             <tr>
-              <th>Date</th><th>Promo</th><th>Type</th><th>Book</th><th>Status</th>
+              <th>Date</th><th>Day</th><th>Promo</th><th>Type</th><th>Book</th><th>Status</th>
               <th className="r">Profit</th><th className="r">Client</th><th className="r">You</th>
             </tr>
           </thead>
@@ -238,7 +227,7 @@ function Plays({ client, plays, legsBy, reload }: { client: Client; plays: Play[
               const profit = p.status === "settled" ? Number(p.profit) || 0 : null;
               const cs = Number(p.client_share) || 0;
               return (
-                <PlayRow key={p.id} play={p} legs={L} client={client} expanded={openId === p.id}
+                <PlayRow key={p.id} play={p} legs={L} client={client} expanded={openId === p.id} startedOn={startedOn}
                   onToggle={() => setOpenId(openId === p.id ? null : p.id)} reload={reload}
                   profit={profit} clientShare={cs} />
               );
@@ -250,12 +239,15 @@ function Plays({ client, plays, legsBy, reload }: { client: Client; plays: Play[
   );
 }
 
-function PlayRow({ play, legs, client, expanded, onToggle, reload, profit, clientShare }:
-  { play: Play; legs: Leg[]; client: Client; expanded: boolean; onToggle: () => void; reload: () => void; profit: number | null; clientShare: number }) {
+function PlayRow({ play, legs, client, expanded, onToggle, reload, profit, clientShare, startedOn }:
+  { play: Play; legs: Leg[]; client: Client; expanded: boolean; onToggle: () => void; reload: () => void; profit: number | null; clientShare: number; startedOn: string | null }) {
+  const date = play.placed_on || (legs.map(l => l.event_time).filter(Boolean).sort()[0] || "").slice(0, 10) || null;
+  const day = startedOn && date ? dayOn(startedOn, date) : null;
   return (
     <>
       <tr className="clickable" onClick={onToggle}>
         <td style={{ color: "var(--text-2)" }}>{play.placed_on || "—"}</td>
+        <td style={{ color: "var(--muted)" }}>{day == null ? "—" : day}</td>
         <td style={{ fontWeight: 500 }}>{play.promo || "—"}</td>
         <td style={{ color: "var(--text-2)" }}>{play.promo_type || "—"}</td>
         <td style={{ color: "var(--text-2)" }}>{play.book || "—"}</td>
@@ -266,7 +258,7 @@ function PlayRow({ play, legs, client, expanded, onToggle, reload, profit, clien
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={8} style={{ background: "var(--surface-2)", whiteSpace: "normal", padding: 14 }}>
+          <td colSpan={9} style={{ background: "var(--surface-2)", whiteSpace: "normal", padding: 14 }}>
             {play.status === "sent"
               ? <Receipt play={play} legs={legs} clientName={client.name} sentAt={(play as any).created_at} onDone={() => setTimeout(reload, 1200)} />
               : <PlayDetail play={play} legs={legs} client={client} reload={reload} />}

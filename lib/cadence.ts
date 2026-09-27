@@ -73,7 +73,31 @@ const isFanDuelBet = (p: CadencePlay) => p.books.includes("FanDuel");
 // "dk 400 fb / fd min loss"); the play's book is the fallback when the text names no book.
 const FD_WORD = /\b(fd|fanduel)\b/i;
 const TSB_WORD = /\b(tsb|thescore|the score|espn)\b/i;
-const ANY_BOOK = /\b(fd|fanduel|dk|draftkings|tsb|thescore|the score|espn|mgm|betmgm|czr|caesars|br|betrivers|bet ?365|fanatics|fan|hard ?rock|hr|borgata|hollywood|bally|fliff)\b/i;
+/** Book names as they appear in promo text, in the app's spelling. */
+const BOOK_WORDS: [RegExp, string][] = [
+  [FD_WORD, "FanDuel"],
+  [/\b(dk|draftkings)\b/i, "DraftKings"],
+  [TSB_WORD, "theScore Bet"],
+  [/\b(mgm|betmgm)\b/i, "BetMGM"],
+  [/\b(czr|caesars?)\b/i, "Caesars"],
+  [/\b(br|betrivers)\b/i, "BetRivers"],
+  [/\b(bet ?365|365)\b/i, "Bet365"],
+  [/\b(fanatics|fan)\b/i, "Fanatics"],
+  [/\b(hard ?rock)\b/i, "Hard Rock"],
+  [/\bborgata\b/i, "Borgata"],
+  [/\bhollywood\b/i, "Hollywood"],
+  [/\b(bally|fliff)\b/i, "Other"],
+];
+const ANY_BOOK = { test: (s: string) => BOOK_WORDS.some(([re]) => re.test(s)) };
+
+/** Which book(s) a play's offer came from: named in the promo text, else the play's own book. */
+export function offerBooksOf(p: CadencePlay): string[] {
+  const promo = p.promo || "";
+  const named = BOOK_WORDS.map(([re, name]) => { const m = re.exec(promo); return m ? { name, at: m.index } : null; })
+    .filter((x): x is { name: string; at: number } => !!x).sort((a, b) => a.at - b.at).map(x => x.name);
+  if (named.length) return Array.from(new Set(named));
+  return Array.from(new Set(p.promoBooks.map(b => (b === "ESPN Bet" ? "theScore Bet" : b))));
+}
 const offerFrom = (p: CadencePlay, word: RegExp, book: string) => {
   const promo = p.promo || "";
   if (/casino/i.test(promo)) return false;

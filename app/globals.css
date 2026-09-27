@@ -366,3 +366,42 @@ table.data .r { text-align: right; }
   .zero-row .status { grid-column: 1; justify-self: start; }
   .zero-act { grid-column: 2; grid-row: 1 / span 2; min-width: 0; }
 }
+
+/* ─── Book colors (timeline, board) ────────────────────────── */
+:root, :root[data-theme="dark"] { --bk-fd: #5b8cff; --bk-dk: #34c38f; --bk-tsb: #e0a940; --bk-mgm: #b89cff; --bk-other: #6c727b; }
+:root[data-theme="light"] { --bk-fd: #2f6bff; --bk-dk: #11845b; --bk-tsb: #a8700d; --bk-mgm: #7b5cd6; --bk-other: #8a9099; }
+
+/* ─── Client overview: 30-day journey + cards ──────────────── */
+.journey { display: flex; flex-direction: column; gap: 12px; }
+.journey-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.journey-track { position: relative; }
+.journey-band { position: absolute; top: 0; height: 22px; border-radius: 6px; background: var(--surface-2); color: var(--text-2); font-size: 11px; font-weight: 600;
+  display: flex; align-items: center; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
+.journey-band.hot { background: var(--accent-soft); color: var(--accent); }
+.journey-axis { position: absolute; left: 0; right: 0; height: 2px; background: var(--border-strong); }
+.journey-promo { position: absolute; width: 8px; height: 8px; margin-left: -4px; margin-top: -3px; border-radius: 50%; border: 1.5px solid var(--accent); background: var(--surface); box-sizing: border-box; }
+.journey-promo.hit { background: var(--accent); }
+.journey-promo.missed { border-color: var(--muted); }
+.journey-dot { position: absolute; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; border: 2px solid; box-sizing: border-box; box-shadow: 0 0 0 2px var(--surface); }
+.journey-label { position: absolute; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.journey-label b { color: var(--text); font-weight: 600; }
+.journey-label .pos { color: var(--pos); }
+.journey-label .neg { color: var(--neg); }
+.journey-today { position: absolute; width: 2px; margin-left: -1px; background: var(--accent); opacity: 0.7; }
+.journey-today-label { position: absolute; font-size: 11px; color: var(--accent); white-space: nowrap; }
+.journey-tick { position: absolute; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.journey-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--muted); }
+.journey-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.journey-legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; box-sizing: border-box; }
+.journey-legend i.ring { border: 1.5px solid var(--text-2); background: transparent; }
+.journey-legend i.promo { border: 1.5px solid var(--accent); }
+
+.overview-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.overview-card { display: flex; flex-direction: column; gap: 8px; }
+.book-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.book-mark { width: 18px; height: 18px; border-radius: 50%; border: 1px dashed var(--border-strong); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; box-sizing: border-box; }
+.book-mark.done { border: none; background: rgba(52, 195, 143, 0.16); color: var(--pos); }
+.book-mark.used { border-style: solid; }
+.book-name { font-weight: 600; width: 84px; flex-shrink: 0; }
+.money-line { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--text-2); }
+.money-line.total { font-size: 16px; font-weight: 650; color: var(--text); padding-top: 8px; border-top: 1px solid var(--border); }
