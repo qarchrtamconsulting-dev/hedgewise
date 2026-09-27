@@ -5,7 +5,7 @@ import { Client, ClientSummary, Leg, Play, fetchAll, getDb, money, money0, today
 import { isRiskFree, settlePlay, waitingOnSecondLeg, Winner } from "@/lib/settle";
 import { toDec } from "@/lib/constants";
 import { copyText } from "@/lib/clipboard";
-import { GRADED_EVENT, autoGrade } from "@/lib/autograde";
+import { GRADED_EVENT, autoGrade, lastScheduledCheck } from "@/lib/autograde";
 import Receipt from "@/components/Receipt";
 import ClientBoard from "@/components/ClientBoard";
 import type { BoardGroup, BoardRow } from "@/components/ClientBoard";
@@ -50,7 +50,7 @@ function until(d: Date) {
   const day = d.toDateString() === new Date().toDateString() ? (d.getHours() >= 17 ? "Tonight" : "Today")
     : d.toDateString() === new Date(Date.now() + 86400000).toDateString() ? "Tomorrow"
     : d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-  return { text: `${day} ${time}`, rel: m <= 0 ? "live" : m < 60 ? `in ${m}m` : m < 2880 ? `in ${Math.round(m / 60)}h` : "" };
+  return { text: `${day} ${time}`, rel: m <= 0 ? `In progress · ${Math.floor(-m / 60)}h ${-m % 60}m in` : m < 60 ? `in ${m}m` : m < 2880 ? `in ${Math.round(m / 60)}h` : "" };
 }
 const first = (name: string) => name.split(" ")[0];
 const hasInfo = (l: Leg) => !!(l.book || l.selection || Number(l.cash_stake) || Number(l.credit_stake));
@@ -75,6 +75,7 @@ export default function TodayPage() {
   const [grades, setGrades] = useState<{ play_id: string; client_id: string; graded_at: string; summary: string | null; promo: string | null }[]>([]);
   const [gradeMsg, setGradeMsg] = useState<string | null>(null);
   const [grading, setGrading] = useState(false);
+  const [lastRun, setLastRun] = useState<string | null>(null);
   const t = today();
   useEffect(() => { try { const v = localStorage.getItem("hw-stage-view"); if (v === "board" || v === "lanes") setStageView(v); } catch {} }, []);
   const pickView = (v: "board" | "lanes") => { setStageView(v); try { localStorage.setItem("hw-stage-view", v); } catch {} };
@@ -111,6 +112,7 @@ export default function TodayPage() {
           .gte("graded_at", since.toISOString()).order("graded_at", { ascending: false });
         setGrades(((ag || []) as any[]).map(r => ({ play_id: r.play_id, client_id: r.client_id, graded_at: r.graded_at, summary: r.summary, promo: (Array.isArray(r.plays) ? r.plays[0]?.promo : r.plays?.promo) ?? null })));
       } catch { setGrades([]); }
+      lastScheduledCheck().then(setLastRun);
       await loadMarks();
       setLoaded(true);
     } catch (e: any) {
@@ -198,6 +200,15 @@ export default function TodayPage() {
   const boardGroups = useMemo<BoardGroup[]>(() => {
     const todoBy = new Map(rows.map(its => [its[0].e.c.id, its]));
     const zeroBy = new Map(zero.map(i => [i.e.c.id, i]));
+    const openBy = new Map<string, PlayRow[]>();
+    open.forEach(p => { const a = openBy.get(p.client_id) || []; a.push(p); openBy.set(p.client_id, a); });
+    const betLine = (id: string) => {
+      const ps = (openBy.get(id) || []).filter(p => !waitingOnSecondLeg(p, p.legs));
+      if (!ps.length) return undefined;
+      const p = ps.map(x => ({ x, s: startOf(x) })).sort((a, b) => (a.s?.getTime() ?? 9e15) - (b.s?.getTime() ?? 9e15))[0];
+      const when = p.s ? (p.s.getTime() <= Date.now() ? "game in progress" : `starts ${until(p.s).text}`) : "no game time";
+      return `Open bet: ${p.x.promo || "play"} · ${when}${ps.length > 1 ? ` (+${ps.length - 1} more)` : ""}`;
+    };
     const toRow = (e: Entry): BoardRow => {
       const its = todoBy.get(e.c.id) || [];
       const z = zeroBy.get(e.c.id);
@@ -222,9 +233,9 @@ export default function TodayPage() {
       }
       switch (e.cad.lane) {
         case "promo":
-          return { ...base, next: e.cad.nextPromoOn ? `$500 promo ${e.cad.nextPromoOn === t ? "today" : dayLabel(e.cad.nextPromoOn)}` : "No $500 promo left", nextSub: "Nothing due today" };
+          return { ...base, next: e.cad.nextPromoOn ? `$500 promo ${e.cad.nextPromoOn === t ? "today" : dayLabel(e.cad.nextPromoOn)}` : "No $500 promo left", nextSub: betLine(e.c.id) || "Nothing due today" };
         case "week1":
-          return { ...base, next: (e.cad.day || 0) < 1 ? `Starts ${dayLabel(e.cad.startedOn!)}` : "All set for today", nextSub: (e.cad.day || 0) >= 1 ? `Week 1 · ${weekOneStep(e.cad.day!)}` : undefined };
+          return { ...base, next: (e.cad.day || 0) < 1 ? `Starts ${dayLabel(e.cad.startedOn!)}` : "All set for today", nextSub: betLine(e.c.id) || ((e.cad.day || 0) >= 1 ? `Week 1 · ${weekOneStep(e.cad.day!)}` : undefined) };
         case "wrap":
           return { ...base, next: e.owes > 0.5 ? `Collect ${money0(e.owes)}` : "Settled up", nextSub: e.cad.lastPlay ? `Last play ${dayLabel(e.cad.lastPlay)}` : undefined,
             action: e.owes > 0.5 ? <Link className="btn-ghost bd-btn" href="/money">Collect</Link> : undefined };
@@ -245,7 +256,7 @@ export default function TodayPage() {
     return G.map(g => ({ key: g.lane, title: g.title, range: g.range, rule: g.rule, hot: g.lane === "promo",
       rows: board.filter(e => e.cad.lane === g.lane).sort(laneOrder(g.lane)).map(toRow) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, rows, zero, t]);
+  }, [board, rows, zero, open, t]);
 
   const now = Date.now();
   // Risk-free bets whose first leg lost stay open until the bonus-bet second leg is logged.
@@ -349,7 +360,9 @@ export default function TodayPage() {
       )}
 
       <Section id="needs" title="Needs a result" empty="Nothing waiting on a result." count={needs.length}
-        sub={gradeMsg || "Finished games are checked against final scores every 15 minutes while Hedgewise is open."}
+        sub={gradeMsg || (lastRun && Date.now() - Date.parse(lastRun) < 13 * 3600e3
+          ? `Finished games are checked against final scores around 6 PM, midnight and 6 AM · last check ${clock(lastRun)}`
+          : "Finished games are checked against final scores every 15 minutes while Hedgewise is open.")}
         action={<button className="btn-ghost" onClick={checkScores} disabled={grading}>{grading ? "Checking…" : "Check scores"}</button>}>
         {needs.map(p => <NeedsResult key={p.id} play={p} client={clients.get(p.client_id)} onDone={load} />)}
         {grades.length > 0 && (
@@ -404,7 +417,8 @@ export default function TodayPage() {
         </div>
       </Section>
 
-      <Section id="upcoming" title="Upcoming games" empty="No open plays." count={upcoming.length}>
+      <Section id="upcoming" title="Open bets" empty="No open plays." count={upcoming.length}
+        sub="Games in progress or still to come. A game moves to Needs a result once it should be over (3.5 hours after the start).">
         {upcoming.map(p => {
           const c = clients.get(p.client_id); const s = startOf(p); const u = s ? until(s) : null;
           const pair = p.legs.filter(l => l.seq === 1 && hasInfo(l));
@@ -415,7 +429,7 @@ export default function TodayPage() {
                 <div className="task-lines">{pair.map(l => <div key={l.id}>{l.side === "promo" ? "Bet" : l.self_hedge ? "Hedge (you)" : "Hedge"}: {legLine(l)}</div>)}</div>
               </div>
               <div className="task-side">
-                {u ? <><div className="num" style={{ fontWeight: 600 }}>{u.text}</div>{u.rel && <div className={u.rel === "live" ? "game-soon" : "task-sub"}>{u.rel}</div>}</> : <div className="task-sub">No game time</div>}
+                {u ? <><div className="num" style={{ fontWeight: 600 }}>{u.text}</div>{u.rel && <div className={u.rel.startsWith("In progress") ? "game-soon" : "task-sub"}>{u.rel}</div>}</> : <div className="task-sub">No game time</div>}
               </div>
             </div>
           );
