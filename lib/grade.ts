@@ -81,7 +81,7 @@ const scoreOf = (e: ScoreEvent, team: string) => {
   return s ? parseFloat(s.score) : NaN;
 };
 type Side = "home" | "away";
-const sideOf = (text: string, e: ScoreEvent): Side | null => {
+const sideOf = (text: string, e: { home_team: string; away_team: string }): Side | null => {
   const h = teamMatch(text, e.home_team), a = teamMatch(text, e.away_team);
   if (h === 1 && a < 1) return "home";
   if (a === 1 && h < 1) return "away";
@@ -103,7 +103,10 @@ export function gradePair(promo: GradeLeg, hedge: GradeLeg | null, events: Score
   let event: ScoreEvent | null = null;
   let pSide: Side | null = null, hSide: Side | null = null;
   const byId = promo.odds_event_id || hedge?.odds_event_id;
-  if (byId) event = done.find(e => e.id === byId) || null;
+  if (byId) {
+    event = done.find(e => e.id === byId) || null;
+    if (!event) return null;          // that exact game isn't final yet (never grade it off another game)
+  }
   const candidates = event ? [event] : done.filter(near);
   const found: { e: ScoreEvent; p: Side | null; h: Side | null }[] = [];
   for (const e of candidates) {
@@ -153,6 +156,30 @@ export function gradePair(promo: GradeLeg, hedge: GradeLeg | null, events: Score
   }
   const won = pick === "void" ? "push" : `${(pick === "promo" ? promo.selection : hedge?.selection) || (pick === "promo" ? "bet" : "hedge")} won`;
   return { pick, event, summary: `${final} · ${won}` };
+}
+
+export interface GameRef { id: string; sport_key: string; commence_time: string; home_team: string; away_team: string }
+
+/** The one listed game (in progress or upcoming) a pair is on: both named teams must be in it, on opposite
+ *  sides, starting within 6 hours of the bet's game time. Stricter than grading, since a wrong match here
+ *  would move a bet to Needs a result early. */
+export function findGame(promo: GradeLeg | null, hedge: GradeLeg | null, games: GameRef[], legTime: number | null): GameRef | null {
+  if (legTime == null) return null;
+  const P = parseSelection(promo?.selection), H = parseSelection(hedge?.selection);
+  if (!P.team && !H.team) return null;
+  const hits = games.map(g => {
+    const dt = Math.abs(Date.parse(g.commence_time) - legTime);
+    if (!(dt <= 6 * 3600e3)) return null;
+    const p = P.team ? sideOf(P.team, g) : null;
+    const h = H.team ? sideOf(H.team, g) : null;
+    if ((P.team && !p) || (H.team && !h)) return null;
+    if (p && h && p === h && P.kind !== "total") return null;
+    return { g, dt };
+  }).filter((x): x is { g: GameRef; dt: number } => !!x).sort((a, b) => a.dt - b.dt);
+  if (!hits.length) return null;
+  // Same teams twice (a doubleheader): only when one start is clearly the closer one.
+  if (hits.length > 1 && hits[1].dt - hits[0].dt < 2 * 3600e3) return null;
+  return hits[0].g;
 }
 
 /** Grade a whole play: every pair must match, or nothing is returned. */

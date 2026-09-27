@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { gradeOpenPlays } from "@/lib/grade-run";
-import { getScores } from "@/lib/scores-server";
+import { checkGames, gradeOpenPlays } from "@/lib/grade-run";
+import { getGames, getScores } from "@/lib/scores-server";
 import { todayIn, zonedToMs } from "@/lib/tz";
 
 // Scheduled grading (vercel.json: around 6 PM, midnight and 6 AM Eastern). Vercel calls this with
@@ -22,10 +22,14 @@ export async function GET(req: NextRequest) {
 
   const db = createClient(url, service, { auth: { persistSession: false } });
   try {
+    const toMs = (local: string) => zonedToMs(local, TZ);
+    // Which games have ended (free), then final scores for those.
+    const status = await checkGames(db, { getGames: sports => getGames(sports.split(","), odds), toMs }).catch(() => undefined);
     const run = await gradeOpenPlays(db, {
       getEvents: async sports => (await getScores(sports.split(","), odds)).events,
-      toMs: local => zonedToMs(local, TZ),
+      toMs,
       today: todayIn(TZ),
+      status,
     });
     await db.from("app_settings").upsert({ key: "grading_last_run", value: new Date().toISOString() }, { onConflict: "key" });
     return NextResponse.json({ ok: true, ...run });

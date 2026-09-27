@@ -11,7 +11,7 @@ function offsetMs(ms: number, tz: string) {
 
 /** "2026-09-26T19:15:00" in a time zone -> epoch ms. */
 export function zonedToMs(local: string, tz: string) {
-  const [d, t = "00:00:00"] = local.slice(0, 19).split("T");
+  const [d, t = "00:00:00"] = local.slice(0, 19).replace(" ", "T").split("T");
   const [y, m, day] = d.split("-").map(Number);
   const [hh = 0, mm = 0, ss = 0] = t.split(":").map(Number);
   const guess = Date.UTC(y, m - 1, day, hh, mm, ss);

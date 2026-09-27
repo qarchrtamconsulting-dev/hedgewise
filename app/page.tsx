@@ -5,7 +5,9 @@ import { Client, ClientSummary, Leg, Play, fetchAll, getDb, money, money0, today
 import { isRiskFree, settlePlay, waitingOnSecondLeg, Winner } from "@/lib/settle";
 import { toDec } from "@/lib/constants";
 import { copyText } from "@/lib/clipboard";
-import { GRADED_EVENT, autoGrade, lastScheduledCheck } from "@/lib/autograde";
+import { GAMES_EVENT, GRADED_EVENT, autoGrade, lastGames, lastScheduledCheck } from "@/lib/autograde";
+import type { GameStatus } from "@/lib/autograde";
+import { needingResult } from "@/lib/grade-run";
 import Receipt from "@/components/Receipt";
 import ClientBoard from "@/components/ClientBoard";
 import type { BoardGroup, BoardRow } from "@/components/ClientBoard";
@@ -24,7 +26,6 @@ type ItemState = MarkStatus | "todo" | "logged";
 interface Item { e: Entry; t: Task; key: string; mark?: Mark; state: ItemState }
 type OnMark = (items: Item[], status: MarkStatus | null, fromLink?: boolean) => void;
 
-const GAME_LENGTH_H = 3.5;   // after this long past start, a game counts as finished
 const keyOf = (clientId: string, kind: string, dueOn: string) => `${clientId}|${kind}|${dueOn}`;
 
 const smsHref = (phone: string | null | undefined, body: string) => {
@@ -38,6 +39,11 @@ function startOf(p: PlayRow): Date | null {
   if (t.length) return new Date(Math.min(...t));
   return p.placed_on ? new Date(`${p.placed_on}T23:59:00`) : null;
 }
+const localMs = (s: string) => new Date(s).getTime();
+const matchup = (p: PlayRow) => {
+  const sel = (side: string) => p.legs.find(l => l.seq === 1 && l.side === side)?.selection;
+  return [sel("promo"), sel("hedge")].filter(Boolean).join(" vs ");
+};
 function ago(d: Date) {
   const m = Math.round((Date.now() - d.getTime()) / 60000);
   if (m < 60) return `${m}m ago`;
@@ -76,9 +82,20 @@ export default function TodayPage() {
   const [gradeMsg, setGradeMsg] = useState<string | null>(null);
   const [grading, setGrading] = useState(false);
   const [lastRun, setLastRun] = useState<string | null>(null);
+  const [games, setGames] = useState<Map<string, GameStatus> | null>(() => lastGames()?.status || null);
+  const [, setTick] = useState(0);
   const t = today();
   useEffect(() => { try { const v = localStorage.getItem("hw-stage-view"); if (v === "board" || v === "lanes") setStageView(v); } catch {} }, []);
   const pickView = (v: "board" | "lanes") => { setStageView(v); try { localStorage.setItem("hw-stage-view", v); } catch {} };
+
+  // Game statuses come from the background check (components/AuthGate); a minute tick keeps times current.
+  useEffect(() => {
+    const f = () => setGames(lastGames()?.status || null);
+    f();
+    window.addEventListener(GAMES_EVENT, f);
+    const i = setInterval(() => setTick(x => x + 1), 60 * 1000);
+    return () => { window.removeEventListener(GAMES_EVENT, f); clearInterval(i); };
+  }, []);
 
   const loadMarks = useCallback(async () => {
     try {
@@ -134,8 +151,11 @@ export default function TodayPage() {
     setGrading(false);
     if (!r) { setGradeMsg("Already checking. Give it a few seconds."); return; }
     if (r.error) { setGradeMsg(`Couldn't check scores: ${r.error}`); return; }
-    setGradeMsg(r.checked === 0 ? "No finished games waiting on a result."
-      : `Checked ${r.checked} finished game${r.checked === 1 ? "" : "s"}: graded ${r.graded}${r.left ? `, ${r.left} still need${r.left === 1 ? "s" : ""} you (props, unclear names, or no final score yet)` : ""}.`);
+    const o = Object.values(r.outcomes || {});
+    const fin = o.filter(x => x === "final").length, wait = o.filter(x => x === "waiting").length;
+    setGradeMsg(r.checked === 0 ? "No open bets with a game underway."
+      : [r.graded ? `Graded ${r.graded}` : "", fin ? `${fin} final but need${fin === 1 ? "s" : ""} you (props, or names the scores feed doesn't match)` : "",
+        wait ? `${wait} with no final score yet` : ""].filter(Boolean).join(" · ") + ".");
     load();
   };
 
@@ -196,6 +216,17 @@ export default function TodayPage() {
     }));
   }, [board]);
 
+  const now = Date.now();
+  // Risk-free bets whose first leg lost stay open until the bonus-bet second leg is logged.
+  const waiting = useMemo(() => open.filter(p => waitingOnSecondLeg(p, p.legs)), [open]);
+  // Needs a result: the game ended (from the game list), or 3.5 hours passed for bets it can't follow.
+  const needs = useMemo(() => needingResult(open, games, localMs, now)
+    .sort((a, b) => (startOf(a)!.getTime()) - (startOf(b)!.getTime())), [open, now, games]);
+  const live = useMemo(() => open.filter(p => !waiting.includes(p) && !needs.includes(p) && (startOf(p)?.getTime() ?? Infinity) <= now)
+    .sort((a, b) => startOf(a)!.getTime() - startOf(b)!.getTime()), [open, waiting, needs, now]);
+  const upcoming = useMemo(() => open.filter(p => !needs.includes(p) && !waiting.includes(p))
+    .sort((a, b) => (startOf(a)?.getTime() ?? 9e15) - (startOf(b)?.getTime() ?? 9e15)), [open, needs, waiting]);
+
   // Today A board: one row per client with a 30-day track, grouped by stage, promo days first.
   const boardGroups = useMemo<BoardGroup[]>(() => {
     const todoBy = new Map(rows.map(its => [its[0].e.c.id, its]));
@@ -206,7 +237,7 @@ export default function TodayPage() {
       const ps = (openBy.get(id) || []).filter(p => !waitingOnSecondLeg(p, p.legs));
       if (!ps.length) return undefined;
       const p = ps.map(x => ({ x, s: startOf(x) })).sort((a, b) => (a.s?.getTime() ?? 9e15) - (b.s?.getTime() ?? 9e15))[0];
-      const when = p.s ? (p.s.getTime() <= Date.now() ? "game in progress" : `starts ${until(p.s).text}`) : "no game time";
+      const when = needs.includes(p.x) ? "game over, needs a result" : p.s ? (p.s.getTime() <= Date.now() ? "game in progress" : `starts ${until(p.s).text}`) : "no game time";
       return `Open bet: ${p.x.promo || "play"} · ${when}${ps.length > 1 ? ` (+${ps.length - 1} more)` : ""}`;
     };
     const toRow = (e: Entry): BoardRow => {
@@ -256,19 +287,8 @@ export default function TodayPage() {
     return G.map(g => ({ key: g.lane, title: g.title, range: g.range, rule: g.rule, hot: g.lane === "promo",
       rows: board.filter(e => e.cad.lane === g.lane).sort(laneOrder(g.lane)).map(toRow) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, rows, zero, open, t]);
+  }, [board, rows, zero, open, needs, t]);
 
-  const now = Date.now();
-  // Risk-free bets whose first leg lost stay open until the bonus-bet second leg is logged.
-  const waiting = useMemo(() => open.filter(p => waitingOnSecondLeg(p, p.legs)), [open]);
-  const needs = useMemo(() => open.filter(p => {
-    if (waiting.includes(p)) return false;
-    const pending = p.legs.filter(l => l.result === "pending" && l.event_time).map(l => new Date(l.event_time as string).getTime());
-    const s = pending.length ? Math.max(...pending) : startOf(p)?.getTime();
-    return s != null && now - s > GAME_LENGTH_H * 3600e3;
-  }).sort((a, b) => (startOf(a)!.getTime()) - (startOf(b)!.getTime())), [open, waiting, now]);
-  const upcoming = useMemo(() => open.filter(p => !needs.includes(p) && !waiting.includes(p))
-    .sort((a, b) => (startOf(a)?.getTime() ?? 9e15) - (startOf(b)?.getTime() ?? 9e15)), [open, needs, waiting]);
 
   // Checking items off: saved right away; a text link updates the list after Messages opens.
   const onMark: OnMark = (list, status, fromLink) => {
@@ -360,11 +380,24 @@ export default function TodayPage() {
       )}
 
       <Section id="needs" title="Needs a result" empty="Nothing waiting on a result." count={needs.length}
-        sub={gradeMsg || (lastRun && Date.now() - Date.parse(lastRun) < 13 * 3600e3
-          ? `Finished games are checked against final scores around 6 PM, midnight and 6 AM · last check ${clock(lastRun)}`
-          : "Finished games are checked against final scores every 15 minutes while Hedgewise is open.")}
+        sub={gradeMsg || `A bet lands here when its game ends, and is graded from the final score within minutes while Hedgewise is open${lastRun && Date.now() - Date.parse(lastRun) < 13 * 3600e3 ? ` · last scheduled check ${clock(lastRun)}` : "."}`}
         action={<button className="btn-ghost" onClick={checkScores} disabled={grading}>{grading ? "Checking…" : "Check scores"}</button>}>
         {needs.map(p => <NeedsResult key={p.id} play={p} client={clients.get(p.client_id)} onDone={load} />)}
+        {live.length > 0 && (
+          <div className="done-list">
+            <div className="task-sub" style={{ padding: "8px 14px" }}>Still playing. {live.length === 1 ? "It moves" : "These move"} here when the game ends.</div>
+            {live.map(p => {
+              const m = Math.max(0, Math.round((now - startOf(p)!.getTime()) / 60000));
+              return (
+                <div key={p.id} className="done-row">
+                  <Link href={`/clients/${p.client_id}`} style={{ fontWeight: 500 }}>{clients.get(p.client_id)?.name || "Client"}</Link>
+                  <span className="task-sub" style={{ flex: 1, minWidth: 160 }}>{[p.promo, matchup(p)].filter(Boolean).join(" · ")}</span>
+                  <span className="status open">{games?.get(p.id) === "live" ? "Live" : "In progress"} · {Math.floor(m / 60)}h {m % 60}m in</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
         {grades.length > 0 && (
           <div className="done-list">
             <div className="task-sub" style={{ padding: "8px 14px" }}>Graded from final scores today. If one is wrong, open the play on the client page and tap Reopen.</div>
@@ -418,7 +451,7 @@ export default function TodayPage() {
       </Section>
 
       <Section id="upcoming" title="Open bets" empty="No open plays." count={upcoming.length}
-        sub="Games in progress or still to come. A game moves to Needs a result once it should be over (3.5 hours after the start).">
+        sub="Games in progress or still to come. A bet moves to Needs a result when its game ends.">
         {upcoming.map(p => {
           const c = clients.get(p.client_id); const s = startOf(p); const u = s ? until(s) : null;
           const pair = p.legs.filter(l => l.seq === 1 && hasInfo(l));

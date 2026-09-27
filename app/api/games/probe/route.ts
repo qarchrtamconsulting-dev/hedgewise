@@ -1,35 +1,35 @@
 import { NextResponse } from "next/server";
+import { checkGames } from "@/lib/grade-run";
+import { gradePlay } from "@/lib/grade";
+import { getGames, getScores } from "@/lib/scores-server";
+import { zonedToMs } from "@/lib/tz";
 
-// TEMPORARY: checks that the Odds API events list is free and lists games in progress. Returns only public
-// game info and credit counters. Remove after checking.
+// TEMPORARY dry run of the server path on a made-up bet (no client data, nothing saved): finds the game on
+// the free list, reports its status, and with ?scores=1 (2 credits) tries grading it. Remove after checking.
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const withScores = new URL(req.url).searchParams.get("scores") === "1";
   const key = process.env.ODDS_API_KEY;
   if (!key) return NextResponse.json({ error: "no key" }, { status: 500 });
-  const until = new Date(Date.now() + 2 * 86400e3).toISOString().slice(0, 19) + "Z";
-  const hit = async (sport: string, extra = "") => {
-    const res = await fetch(`https://api.the-odds-api.com/v4/sports/${sport}/events?dateFormat=iso${extra}&apiKey=${key}`, { cache: "no-store" });
-    const body = await res.json().catch(() => null);
-    return { status: res.status, used: res.headers.get("x-requests-used"), remaining: res.headers.get("x-requests-remaining"), last: res.headers.get("x-requests-last"), body };
+  const withScores = new URL(req.url).searchParams.get("scores") === "1";
+  const legs = [
+    { id: "a", seq: 1, side: "promo", selection: "athletics ml", event_time: "2026-09-26T21:40:00", result: "pending", odds_event_id: null, sport_key: null },
+    { id: "b", seq: 1, side: "hedge", selection: "astros ml", event_time: "2026-09-26T21:40:00", result: "pending", odds_event_id: null, sport_key: null },
+  ];
+  const play = { id: "demo", client_id: "demo", promo: "demo", promo_type: "Other", status: "open", placed_on: "2026-09-26", legs };
+  const saved: any[] = [];
+  const db = {
+    from: (t: string) => {
+      const q: any = {
+        v: null, select: () => q, update: (v: any) => { q.v = v; return q; },
+        eq: (c: string, x: any) => { if (q.v) saved.push({ t, ...q.v, [c]: x }); return q; },
+        then: (res: any, rej: any) => Promise.resolve(q.v ? { error: null } : { data: [play], error: null }).then(res, rej),
+      };
+      return q;
+    },
   };
-  const a = await hit("baseball_mlb");
-  const b = await hit("baseball_mlb", `&commenceTimeTo=${until}`);
-  const c = await hit("americanfootball_ncaaf", `&commenceTimeTo=${until}`);
-  // One scores pull (2 credits) to compare: is the finished game marked completed there yet?
-  const sc = withScores ? await fetch(`https://api.the-odds-api.com/v4/sports/baseball_mlb/scores/?dateFormat=iso&apiKey=${key}`, { cache: "no-store" }) : null;
-  const scBody = sc ? await sc.json().catch(() => []) : [];
-  const scores = (Array.isArray(scBody) ? scBody : []).filter((e: any) => Date.parse(e.commence_time) > Date.now() - 6 * 3600e3 && Date.parse(e.commence_time) < Date.now())
-    .map((e: any) => `${e.away_team} @ ${e.home_team} · completed=${e.completed} · last_update=${e.last_update} · ${JSON.stringify(e.scores)}`);
-  const now = Date.now();
-  const list = (x: any) => (Array.isArray(x.body) ? x.body : []);
-  return NextResponse.json({
-    at: new Date().toISOString(),
-    calls: [a, b, c].map(x => ({ status: x.status, used: x.used, remaining: x.remaining, last: x.last, count: list(x).length, error: Array.isArray(x.body) ? null : x.body })),
-    mlbStarted: list(a).filter((e: any) => Date.parse(e.commence_time) <= now).map((e: any) => `${e.away_team} @ ${e.home_team} · ${e.commence_time} · ${e.id}`),
-    scoresLast: sc ? sc.headers.get("x-requests-last") : null,
-    scores,
-    mlbNext: list(a).filter((e: any) => Date.parse(e.commence_time) > now).slice(0, 3).map((e: any) => `${e.away_team} @ ${e.home_team} · ${e.commence_time}`),
-  });
+  const toMs = (l: string) => zonedToMs(l, "America/New_York");
+  const status = await checkGames(db, { getGames: s => getGames(s.split(","), key), toMs });
+  const grade = withScores ? gradePlay(play as any, legs as any, (await getScores(["baseball_mlb"], key)).events, toMs) : "not asked";
+  return NextResponse.json({ at: new Date().toISOString(), status: Object.fromEntries(status), saved, grade });
 }

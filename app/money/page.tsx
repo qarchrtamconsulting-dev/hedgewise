@@ -4,11 +4,13 @@ import Link from "next/link";
 import { Client, ClientSummary, fetchAll, getDb, money, money0, shortDate, today } from "@/lib/db";
 import { PROMO_LAST_DAY, cadenceFor, toCadencePlay } from "@/lib/cadence";
 import type { ClientCadence, PlayLike } from "@/lib/cadence";
+import type { Leg, Play } from "@/lib/db";
+import { needingResult } from "@/lib/grade-run";
+import { lastGames } from "@/lib/autograde";
 
 type CPlay = PlayLike & { client_id: string; legs?: { book: string | null; side: string; event_time: string | null }[] | null };
 interface Row { c: Client; s?: ClientSummary; cad: ClientCadence; owes: number; loan: number; yours: number; received: number; open: number; asked: string | null }
 
-const GAME_LENGTH_H = 3.5;
 const METHODS = ["Zelle", "Venmo", "PayPal", "Cash App", "Cash", "Bank transfer", "Other"];
 const smsHref = (phone: string | null | undefined, body: string) => {
   let digits = (phone || "").replace(/[^\d+]/g, "");
@@ -24,6 +26,7 @@ export default function MoneyPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [sums, setSums] = useState<ClientSummary[]>([]);
   const [plays, setPlays] = useState<CPlay[]>([]);
+  const [openRows, setOpenRows] = useState<(Play & { legs: Leg[] })[]>([]);
   const [asked, setAsked] = useState<Map<string, string>>(new Map());
   const [err, setErr] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -32,12 +35,13 @@ export default function MoneyPage() {
   const load = useCallback(async () => {
     try {
       const db = await getDb();
-      const [cs, su, ps] = await Promise.all([
+      const [cs, su, ps, op] = await Promise.all([
         fetchAll<Client>((a, b) => db.from("clients").select("id,name,phone,email,state,split,status,referred_by,notes,approved_books").range(a, b)),
         fetchAll<ClientSummary>((a, b) => db.from("client_summary").select("*").range(a, b)),
         fetchAll<CPlay>((a, b) => db.from("plays").select("client_id,status,promo,book,placed_on,legs(book,side,event_time)").neq("status", "void").range(a, b)),
+        fetchAll<Play & { legs: Leg[] }>((a, b) => db.from("plays").select("*, legs(*)").eq("status", "open").range(a, b)),
       ]);
-      setClients(cs); setSums(su); setPlays(ps);
+      setClients(cs); setSums(su); setPlays(ps); setOpenRows(op);
       try {
         const ms = await fetchAll<{ client_id: string; due_on: string }>((a, b) => db.from("task_marks").select("client_id,due_on").eq("kind", "collect_request").range(a, b));
         const m = new Map<string, string>();
@@ -60,15 +64,8 @@ export default function MoneyPage() {
     });
   }, [clients, sums, plays, asked, t]);
 
-  // Open plays whose game should be over: they need a result before anything can be collected.
-  const needsResult = useMemo(() => {
-    const now = Date.now();
-    return plays.filter(p => p.status === "open").filter(p => {
-      const times = (p.legs || []).map(l => l.event_time).filter(Boolean).map(x => new Date(x as string).getTime());
-      const start = times.length ? Math.min(...times) : p.placed_on ? new Date(`${p.placed_on}T23:59:00`).getTime() : null;
-      return start != null && now - start > GAME_LENGTH_H * 3600e3;
-    }).length;
-  }, [plays]);
+  // Open plays whose game is over: they need a result before anything can be collected (same rule as Today).
+  const needsResult = useMemo(() => needingResult(openRows, lastGames()?.status, s => new Date(s).getTime()).length, [openRows]);
 
   const owing = rows.filter(r => r.owes > 0.5);
   const collect = rows.filter(r => r.owes > 0.5 && r.c.status === "active" && (r.cad.lane === "wrap" || r.cad.lane === "quiet" || (r.cad.day != null && r.cad.day >= PROMO_LAST_DAY)))

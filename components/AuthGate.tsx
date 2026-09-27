@@ -2,7 +2,7 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { getDb } from "@/lib/db";
 import { checkNewPassword } from "@/lib/password";
-import { autoGrade } from "@/lib/autograde";
+import { autoGrade, lastGames } from "@/lib/autograde";
 
 type State = "loading" | "in" | "out" | "recovery" | "error";
 
@@ -214,12 +214,16 @@ function SetNewPassword({ onDone }: { onDone: () => void }) {
   );
 }
 
-/** While signed in: grade finished games from final scores now and every 15 minutes the site stays open. */
+/** While signed in: check open bets' games now and every 5 minutes the site stays open (free), and grade
+ *  a play from the final score once its game ends. */
 function AutoGrader() {
   useEffect(() => {
     autoGrade();
-    const t = setInterval(() => autoGrade(), 15 * 60 * 1000);
-    return () => clearInterval(t);
+    const t = setInterval(() => autoGrade(), 5 * 60 * 1000);
+    // Coming back to the tab (or the phone app) after a while: check right away.
+    const onShow = () => { if (document.visibilityState === "visible" && Date.now() - (lastGames()?.at || 0) > 2 * 60 * 1000) autoGrade(); };
+    document.addEventListener("visibilitychange", onShow);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onShow); };
   }, []);
   return null;
 }
