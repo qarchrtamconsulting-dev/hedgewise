@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Client, fetchAll, getDb, today } from "@/lib/db";
+import { fetchAll, getDb, today } from "@/lib/db";
 import { cadenceFor, toCadencePlay } from "@/lib/cadence";
 import type { Lane, PlayLike } from "@/lib/cadence";
 
@@ -51,7 +51,7 @@ export default function PlaybookPage() {
       try {
         const db = await getDb();
         const [cs, ps] = await Promise.all([
-          fetchAll<Client>((a, b) => db.from("clients").select("id,name,status").in("status", ["active", "onboarding"]).range(a, b)),
+          fetchAll<{ id: string; name: string; status: string | null }>((a, b) => db.from("clients").select("id,name,status").in("status", ["active", "onboarding"]).range(a, b)),
           fetchAll<CPlay>((a, b) => db.from("plays").select("client_id,status,promo,book,placed_on,legs(book,side,event_time)").neq("status", "void").range(a, b)),
         ]);
         const by = new Map<string, ReturnType<typeof toCadencePlay>[]>();
