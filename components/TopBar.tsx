@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/tools", label: "Tools" },
   { href: "/clients", label: "Clients" },
   { href: "/money", label: "Money" },
+  { href: "/playbook", label: "Playbook" },
 ];
 
 /** How many people aren't live yet: onboarding leads plus active clients with no FanDuel bet. */

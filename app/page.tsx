@@ -263,7 +263,7 @@ export default function TodayPage() {
   const noPhone = rows.filter(its => its.some(i => i.t.send) && !its[0].e.c.phone).length;
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 className="page-title">Today</h1>
