@@ -65,6 +65,7 @@ export default function AccountMenu() {
             <ChangePassword email={email} onDone={() => setChanging(false)} />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <a className="btn-ghost" style={{ padding: "8px 10px", textAlign: "center" }} href="/import">Import data</a>
               <button className="btn-ghost" style={{ padding: "8px 10px" }} onClick={() => setChanging(true)}>Change password</button>
               <button className="btn-ghost" style={{ padding: "8px 10px" }} onClick={signOut}>Sign out</button>
             </div>

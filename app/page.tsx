@@ -110,12 +110,13 @@ export default function TodayPage() {
     cplays.forEach(p => { const a = byClient.get(p.client_id) || []; a.push(toCadencePlay(p)); byClient.set(p.client_id, a); });
     const sumBy = new Map<string, ClientSummary>(sums.map(s => [s.client_id, s]));
     const n = (x: any) => Number(x) || 0;
-    return (Array.from(clients.values()) as Client[]).filter(c => c.status === "active").map(c => {
+    // Active clients, plus onboarding leads whose first FanDuel bet is already logged.
+    return (Array.from(clients.values()) as Client[]).filter(c => c.status === "active" || c.status === "onboarding").map(c => {
       const plays = byClient.get(c.id) || [];
       const cad = cadenceFor(plays, t);
       const s = sumBy.get(c.id);
       return { c, cad, plays, tasks: tasksForToday(cad, plays, t), owes: n(s?.loan_outstanding) + n(s?.your_share) - n(s?.received) };
-    });
+    }).filter(e => e.c.status === "active" || !!e.cad.startedOn);
   }, [clients, cplays, sums, t]);
 
   const items = useMemo<Item[]>(() => board.flatMap(e => e.tasks.map(tk => {

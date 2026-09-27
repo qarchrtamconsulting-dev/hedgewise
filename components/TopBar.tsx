@@ -3,14 +3,36 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AccountMenu from "@/components/AccountMenu";
+import { getDb } from "@/lib/db";
 
 const LINKS = [
+  { href: "/onboarding", label: "Onboarding" },
   { href: "/", label: "Today" },
   { href: "/tools", label: "Tools" },
   { href: "/clients", label: "Clients" },
   { href: "/money", label: "Money" },
-  { href: "/import", label: "Import" },
 ];
+
+/** How many people aren't live yet: onboarding leads plus active clients with no FanDuel bet. */
+function useLeadCount(path: string) {
+  const [n, setN] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const db = await getDb();
+        const [{ data: cs }, { data: su }] = await Promise.all([
+          db.from("clients").select("id,status").in("status", ["onboarding", "active"]),
+          db.from("client_summary").select("client_id,started_on"),
+        ]);
+        const started = new Set((su || []).filter((s: any) => s.started_on).map((s: any) => s.client_id));
+        if (alive) setN((cs || []).filter((c: any) => !started.has(c.id)).length);
+      } catch {}
+    })();
+    return () => { alive = false; };
+  }, [path]);
+  return n;
+}
 
 function ThemeToggle() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -45,6 +67,7 @@ function ThemeToggle() {
 
 export default function TopBar() {
   const path = usePathname() || "/";
+  const leads = useLeadCount(path);
   return (
     <header className="topbar">
       <Link href="/" className="brand">
@@ -54,7 +77,7 @@ export default function TopBar() {
       <nav className="nav">
         {LINKS.map(l => (
           <Link key={l.href} href={l.href} className={`nav-link${(l.href === "/" ? path === "/" : path.startsWith(l.href)) ? " active" : ""}`}>
-            {l.label}
+            {l.label}{l.href === "/onboarding" && leads ? <span className="nav-count"> · {leads}</span> : null}
           </Link>
         ))}
       </nav>
