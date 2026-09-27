@@ -206,6 +206,7 @@ table.data .r { text-align: right; }
 .status.open { color: var(--warn); border-color: var(--warn); }
 .status.settled { color: var(--pos); border-color: var(--pos); }
 .status.void { color: var(--muted); }
+.status.sent { color: var(--accent); border-color: var(--accent); }
 .status.won { color: var(--pos); border-color: var(--pos); }
 .status.lost { color: var(--neg); border-color: var(--neg); }
 .status.pending { color: var(--warn); border-color: var(--warn); }
@@ -294,4 +295,22 @@ table.data .r { text-align: right; }
   position: absolute; right: 0; top: calc(100% + 8px); z-index: 20;
   width: 280px; max-width: calc(100vw - 32px); padding: 16px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* ─── Receipt (sent, waiting to be confirmed) ──────────────── */
+.receipt { display: flex; flex-direction: column; gap: 12px; background: var(--surface); border: 1px dashed var(--accent); border-radius: 10px; padding: 14px 16px; }
+.receipt-done { flex-direction: row; align-items: center; gap: 10px; flex-wrap: wrap; border-style: solid; border-color: var(--border); font-size: 13px; color: var(--text-2); }
+.receipt-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.receipt-title { font-weight: 600; font-size: 14px; }
+.receipt-legs { display: flex; flex-direction: column; gap: 8px; }
+.receipt-leg { display: grid; grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr)); gap: 10px; align-items: end;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.receipt-leg-name { display: flex; flex-direction: column; gap: 2px; font-size: 13px; min-width: 0; }
+.receipt-field { display: flex; flex-direction: column; min-width: 0; }
+.receipt-field .label { margin-bottom: 4px; }
+.receipt-field .input { padding: 6px 8px; font-size: 13px; }
+.receipt-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .receipt-leg { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .receipt-leg-name { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; gap: 6px; }
 }

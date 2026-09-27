@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS plays (
   promo TEXT,                         -- "fd 500 rfb"
   promo_type TEXT,                    -- Free Bet | Risk Free | Profit Boost | Low Hold | ...
   book TEXT,                          -- promo book
-  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','settled','void')),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('sent','open','settled','void')),  -- sent = texted, not confirmed yet
   placed_on DATE DEFAULT CURRENT_DATE,
   settled_on DATE,
   split_override NUMERIC,             -- use instead of the client's split for this play
@@ -117,11 +117,11 @@ SELECT c.id AS client_id,
        (SELECT COALESCE(SUM(s.amount), 0) FROM settlements s WHERE s.client_id = c.id) AS received,
        (SELECT COALESCE(SUM(CASE WHEN m.type IN ('sent_to_client','self_hedge_stake','opening_balance') THEN m.amount ELSE -m.amount END), 0)
           FROM capital_movements m WHERE m.client_id = c.id) AS loan_outstanding,
-       MAX(pc.placed_on) AS last_play,
+       MAX(pc.placed_on) FILTER (WHERE pc.status <> 'sent') AS last_play,
        -- Start date = the first day the client has a FanDuel bet (either side of any non-void play).
        (SELECT MIN(COALESCE(p.placed_on, l.event_time::date))
           FROM plays p JOIN legs l ON l.play_id = p.id
-         WHERE p.client_id = c.id AND l.book = 'FanDuel' AND p.status <> 'void') AS started_on
+         WHERE p.client_id = c.id AND l.book = 'FanDuel' AND p.status NOT IN ('void','sent')) AS started_on
 FROM clients c
 LEFT JOIN play_calc pc ON pc.client_id = c.id
 GROUP BY c.id;

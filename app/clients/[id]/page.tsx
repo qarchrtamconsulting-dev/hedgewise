@@ -7,6 +7,7 @@ import {
 } from "@/lib/db";
 import { BOOKS } from "@/lib/constants";
 import Onboarding from "@/components/Onboarding";
+import Receipt from "@/components/Receipt";
 import { settlePlay, syncSelfHedgeReturns } from "@/lib/settle";
 
 const ALL_BOOKS = [...BOOKS, "ESPN Bet"];
@@ -56,7 +57,7 @@ export default function ClientPage({ params }: { params: { id: string } }) {
   const startedOn = useMemo(() => {
     let first: string | null = null;
     plays.forEach(p => {
-      if (p.status === "void") return;
+      if (p.status === "void" || p.status === "sent") return;
       (legsBy.get(p.id) || []).forEach(l => {
         if (l.book !== "FanDuel") return;
         const d = (p.placed_on || l.event_time || "").slice(0, 10);
@@ -200,10 +201,11 @@ function EditClient({ client, onSaved }: { client: Client; onSaved: () => void }
 
 // ─── Plays ─────────────────────────────────────────────────────
 function Plays({ client, plays, legsBy, reload }: { client: Client; plays: Play[]; legsBy: Map<string, Leg[]>; reload: () => void }) {
-  const [filter, setFilter] = useState<"open" | "settled" | "all">(plays.some(p => p.status === "open") ? "open" : "all");
+  const [filter, setFilter] = useState<"open" | "settled" | "all">(plays.some(p => p.status === "open" || p.status === "sent") ? "open" : "all");
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const shown = plays.filter(p => filter === "all" || p.status === filter);
+  // "Open" also shows plays that were sent but not confirmed yet.
+  const shown = plays.filter(p => filter === "all" || p.status === filter || (filter === "open" && p.status === "sent"));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -211,7 +213,7 @@ function Plays({ client, plays, legsBy, reload }: { client: Client; plays: Play[
         <div className="tab-bar">
           {(["open", "settled", "all"] as const).map(k => (
             <button key={k} className={`tab${filter === k ? " active" : ""}`} onClick={() => setFilter(k)}>
-              {k === "open" ? `Open · ${plays.filter(p => p.status === "open").length}` : k === "settled" ? "Settled" : "All"}
+              {k === "open" ? `Open · ${plays.filter(p => p.status === "open" || p.status === "sent").length}` : k === "settled" ? "Settled" : "All"}
             </button>
           ))}
         </div>
@@ -257,7 +259,7 @@ function PlayRow({ play, legs, client, expanded, onToggle, reload, profit, clien
         <td style={{ fontWeight: 500 }}>{play.promo || "—"}</td>
         <td style={{ color: "var(--text-2)" }}>{play.promo_type || "—"}</td>
         <td style={{ color: "var(--text-2)" }}>{play.book || "—"}</td>
-        <td><span className={`status ${play.status}`}>{play.status}</span></td>
+        <td><span className={`status ${play.status}`}>{play.status === "sent" ? "not logged" : play.status}</span></td>
         <td className="r" style={{ color: profit == null ? "var(--muted)" : tone(profit) }}>{profit == null ? "—" : money(profit)}</td>
         <td className="r" style={{ color: "var(--text-2)" }}>{profit == null ? "—" : money(clientShare)}</td>
         <td className="r">{profit == null ? "—" : money(profit - clientShare)}</td>
@@ -265,7 +267,9 @@ function PlayRow({ play, legs, client, expanded, onToggle, reload, profit, clien
       {expanded && (
         <tr>
           <td colSpan={8} style={{ background: "var(--surface-2)", whiteSpace: "normal", padding: 14 }}>
-            <PlayDetail play={play} legs={legs} client={client} reload={reload} />
+            {play.status === "sent"
+              ? <Receipt play={play} legs={legs} clientName={client.name} sentAt={(play as any).created_at} onDone={() => setTimeout(reload, 1200)} />
+              : <PlayDetail play={play} legs={legs} client={client} reload={reload} />}
           </td>
         </tr>
       )}

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Client, ClientSummary, Leg, Play, fetchAll, getDb, money, today } from "@/lib/db";
 import { settlePlay, Winner } from "@/lib/settle";
+import Receipt from "@/components/Receipt";
 
 type PlayRow = Play & { legs: Leg[] };
 const GAME_LENGTH_H = 3.5;   // after this long past start, a game counts as finished
@@ -39,6 +40,7 @@ const legLine = (l: Leg) => [l.book, l.selection, l.odds].filter(Boolean).join("
 export default function TodayPage() {
   const [clients, setClients] = useState<Map<string, Client>>(new Map());
   const [open, setOpen] = useState<PlayRow[]>([]);
+  const [sent, setSent] = useState<(PlayRow & { created_at?: string })[]>([]);
   const [withdrawals, setWithdrawals] = useState<PlayRow[] | null>([]);
   const [sums, setSums] = useState<ClientSummary[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -53,6 +55,10 @@ export default function TodayPage() {
         fetchAll<ClientSummary>((a, b) => db.from("client_summary").select("*").range(a, b)),
       ]);
       setClients(new Map(cs.map(c => [c.id, c]))); setOpen(op); setSums(su);
+      try {
+        const st = await fetchAll<PlayRow>((a, b) => db.from("plays").select("*, legs(*)").eq("status", "sent").order("created_at").range(a, b));
+        setSent(st);
+      } catch { setSent([]); }
       try {
         const wd = await fetchAll<PlayRow>((a, b) => db.from("plays").select("*, legs(*)").in("withdrawal", ["pending", "requested"]).range(a, b));
         setWithdrawals(wd);
@@ -100,6 +106,15 @@ export default function TodayPage() {
         <Count label="Upcoming" n={upcoming.length} href="#upcoming" />
         <Count label="Ready for next play" n={ready.length} href="#ready" />
       </div>
+
+      {sent.length > 0 && (
+        <Section id="confirm" title="Sent, not logged yet" empty="" count={sent.length}>
+          {sent.map(p => (
+            <Receipt key={p.id} play={p} legs={p.legs} clientName={clients.get(p.client_id)?.name} sentAt={p.created_at}
+              onDone={() => setTimeout(load, 1200)} />
+          ))}
+        </Section>
+      )}
 
       <Section id="needs" title="Needs a result" empty="Nothing waiting on a result." count={needs.length}>
         {needs.map(p => <NeedsResult key={p.id} play={p} client={clients.get(p.client_id)} onDone={load} />)}

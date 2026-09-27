@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FinderGame } from "./useGameFinder";
 import { fmt } from "@/lib/constants";
 import { copyText } from "@/lib/clipboard";
-import { getDb, localIso } from "@/lib/db";
+import { Leg, Play, getDb, localIso } from "@/lib/db";
+import Receipt from "./Receipt";
 
 export interface Ticket {
   /** Promo type logged to the client's sheet, e.g. "Free Bet" */
@@ -70,6 +71,8 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
   const [edited, setEdited] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [loggedFor, setLoggedFor] = useState<string | null>(null);
+  // The saved-but-unconfirmed play for the current client, shown as a receipt to confirm.
+  const [sent, setSent] = useState<{ play: Play; legs: Leg[]; at: string } | null>(null);
   const boxRef = useRef<HTMLTextAreaElement | null>(null);
 
   const client = useMemo(() => clients?.find(c => c.id === clientId), [clients, clientId]);
@@ -99,9 +102,10 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.id, game.fixedAmerican, game.hedgeAmerican, fixedBookName, ticketKey, firstName, edited, clientHedge]);
 
-  const logPlay = async () => {
+  // Sending saves the play as "sent": it shows up as a receipt and only counts once you confirm it.
+  const saveSent = async () => {
     if (!client || !log) return true;
-    if (loggedFor === client.id) return true; // don't double-log if Messages is opened twice
+    if (loggedFor === client.id) return true; // don't save twice if Messages is opened again
     setLoggedFor(client.id);
     try {
       const sb = await db();
@@ -110,10 +114,10 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
         promo: `${fixedBookName} ${ticket.amount ? fmt(ticket.amount) + " " : ""}${ticket.type.toLowerCase()}`,
         promo_type: ticket.type,
         book: fixedBookName,
-        status: "open",
+        status: "sent",
         placed_on: new Date().toISOString().split("T")[0],
         notes: `${game.away} at ${game.home}`,
-      }).select("id").single();
+      }).select("*").single();
       if (error) throw error;
       const event_time = game.commence ? localIso(new Date(game.commence)) : null;
       const hedgeLeg = (cash: number, self: boolean) => ({
@@ -129,33 +133,26 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
       ];
       if (clientHedge > 0.005) rows.push(hedgeLeg(clientHedge, false));
       if (mine > 0.005) rows.push(hedgeLeg(mine, true));
-      const { error: legErr } = await sb.from("legs").insert(rows);
-      if (legErr) throw legErr;
-      // Your self hedge goes on the loan, same as sending the client money.
-      if (mine > 0.005) {
-        const { error: mvErr } = await sb.from("capital_movements").insert({
-          client_id: client.id, play_id: play!.id, type: "self_hedge_stake", amount: r2(mine),
-          date: new Date().toISOString().split("T")[0],
-          notes: `${game.hedgeBookName} ${game.hedgeTeam} ${game.hedgeAmerican} (pays ${fmt(mine * game.hedgeDecimal)})`,
-        });
-        if (mvErr) throw mvErr;
-      }
-      setStatus(`Logged to ${client.name}`);
+      const { data: legs, error: legErr } = await sb.from("legs").insert(rows).select("*");
+      if (legErr) { await sb.from("plays").delete().eq("id", play!.id); throw legErr; }
+      setSent({ play: play as Play, legs: (legs || []) as Leg[], at: new Date().toISOString() });
+      setStatus(null);
       return true;
     } catch (e: any) {
       setLoggedFor(null);
-      setStatus(`Couldn't log to ${client.name}: ${e?.message || "database error"}`);
+      setStatus(`Couldn't save for ${client.name}: ${e?.message || "database error"}`);
       return false;
     }
   };
 
   // Messages opens from a real link click (browsers block app launches that
   // happen after an await); logging runs in the background.
-  const onOpenMessages = () => { void logPlay(); };
+  const onOpenMessages = () => { void saveSent(); };
 
   const copy = async () => {
     const ok = await copyText(body, boxRef.current);
     setStatus(ok ? "Message copied" : "Text selected. Press Cmd+C to copy");
+    void saveSent();
   };
 
   if (!open) {
@@ -169,14 +166,14 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
       <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 12, alignItems: "end" }}>
         <div>
           <span className="label">Client</span>
-          <select className="input" value={clientId} onChange={e => setClientId(e.target.value)}>
+          <select className="input" value={clientId} onChange={e => { setClientId(e.target.value); setStatus(null); }}>
             <option value="">{clients === null ? "Loading…" : listed.length ? (showAll ? "Choose a client" : "Choose an active client") : "No active clients"}</option>
             {listed.map(c => <option key={c.id} value={c.id}>{c.name}{c.status !== "active" ? " (inactive)" : ""}</option>)}
           </select>
         </div>
         <label className="tog" style={{ paddingBottom: 8 }}>
           <input type="checkbox" checked={log} onChange={e => setLog(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
-          <span style={{ color: "var(--text-2)", fontSize: 13 }}>Log to client</span>
+          <span style={{ color: "var(--text-2)", fontSize: 13 }}>Save a receipt</span>
         </label>
         <label className="tog" style={{ paddingBottom: 8 }}>
           <input type="checkbox" checked={selfHedge} onChange={e => { setSelfHedge(e.target.checked); setMyHedge(""); setEdited(false); }} style={{ accentColor: "var(--accent)" }} />
@@ -230,6 +227,10 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
         <button className="btn-ghost" onClick={() => { setOpen(false); setStatus(null); }}>Close</button>
         {status && <span style={{ color: "var(--text-2)", fontSize: 12 }}>{status}</span>}
       </div>
+      {sent && client && sent.play.client_id === client.id && (
+        <Receipt key={sent.play.id} play={sent.play} legs={sent.legs} clientName={client.name} sentAt={sent.at}
+          onDone={r => { if (r === "discarded") setLoggedFor(null); }} />
+      )}
       {client && (client.approved_books?.length ?? 0) > 0 && !client.approved_books!.includes(fixedBookName) && (
         <div className="hint" style={{ marginTop: 0, color: "var(--warn)" }}>{client.name} isn't marked as approved on {fixedBookName}.</div>
       )}

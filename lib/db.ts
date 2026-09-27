@@ -59,7 +59,8 @@ export interface Play {
   promo: string | null;
   promo_type: string | null;
   book: string | null;
-  status: "open" | "settled" | "void";
+  /** sent = texted to the client, waiting for you to confirm it was placed */
+  status: "sent" | "open" | "settled" | "void";
   placed_on: string | null;
   settled_on: string | null;
   split_override: number | null;
