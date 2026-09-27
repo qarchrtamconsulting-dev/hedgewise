@@ -16,7 +16,7 @@ export const GAMES_EVENT = "hw-games";
 export type { GameStatus, GradeRun } from "@/lib/grade-run";
 
 const TRIES = "hw-grade-tries";          // play id -> automatic final-score checks so far
-const RETRY_MS = 10 * 60e3;
+const RETRY_MS = 9 * 60e3;              // checks run on a 5-minute tick, so this lands every 10 minutes
 const MAX_FOLLOWED = 30;                 // a game we follow by id: about 5 hours of checks
 const MAX_UNFOLLOWED = 4;                // a bet we couldn't find on the game list (names, props): 4 checks
 type Tries = Record<string, { n: number; at: number; stop?: boolean }>;
