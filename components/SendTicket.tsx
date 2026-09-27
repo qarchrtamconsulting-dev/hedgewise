@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FinderGame } from "./useGameFinder";
-import { fmt } from "@/lib/constants";
+import { LEAGUE_SPORT, fmt } from "@/lib/constants";
 import { copyText } from "@/lib/clipboard";
 import { Leg, Play, getDb, localIso, today } from "@/lib/db";
 import Receipt from "./Receipt";
@@ -128,16 +128,18 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
       }).select("*").single();
       if (error) throw error;
       const event_time = game.commence ? localIso(new Date(game.commence)) : null;
+      // The Odds API game and sport, so the bet can be graded from the final score automatically.
+      const game_ref = { odds_event_id: game.id || null, sport_key: (game.league && LEAGUE_SPORT[game.league]) || null };
       const hedgeLeg = (cash: number, self: boolean) => ({
         play_id: play!.id, seq: 1, side: "hedge", book: game.hedgeBookName, self_hedge: self,
         selection: game.hedgeTeam, odds: game.hedgeAmerican,
-        cash_stake: r2(cash), credit_stake: 0, payout: r2(cash * game.hedgeDecimal), result: "pending", event_time,
+        cash_stake: r2(cash), credit_stake: 0, payout: r2(cash * game.hedgeDecimal), result: "pending", event_time, ...game_ref,
       });
       const rows: any[] = [
         { play_id: play!.id, seq: 1, side: "promo", book: fixedBookName, self_hedge: false,
           selection: game.fixedTeam, odds: game.fixedAmerican,
           cash_stake: ticket.fixedIsCredit ? 0 : r2(ticket.fixedStake), credit_stake: ticket.fixedIsCredit ? r2(ticket.fixedStake) : 0,
-          payout: r2(ticket.fixedPayout), result: "pending", event_time },
+          payout: r2(ticket.fixedPayout), result: "pending", event_time, ...game_ref },
       ];
       if (clientHedge > 0.005) rows.push(hedgeLeg(clientHedge, false));
       if (mine > 0.005) rows.push(hedgeLeg(mine, true));

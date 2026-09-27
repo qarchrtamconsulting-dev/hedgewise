@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Client, ClientSummary, Leg, Play, fetchAll, getDb, money, money0, today } from "@/lib/db";
 import { settlePlay, Winner } from "@/lib/settle";
 import { copyText } from "@/lib/clipboard";
+import { GRADED_EVENT, autoGrade } from "@/lib/autograde";
 import Receipt from "@/components/Receipt";
 import ClientBoard from "@/components/ClientBoard";
 import type { BoardGroup, BoardRow } from "@/components/ClientBoard";
@@ -70,6 +71,9 @@ export default function TodayPage() {
   const [note, setNote] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [stageView, setStageView] = useState<"board" | "lanes">("board");
+  const [grades, setGrades] = useState<{ play_id: string; client_id: string; graded_at: string; summary: string | null; promo: string | null }[]>([]);
+  const [gradeMsg, setGradeMsg] = useState<string | null>(null);
+  const [grading, setGrading] = useState(false);
   const t = today();
   useEffect(() => { try { const v = localStorage.getItem("hw-stage-view"); if (v === "board" || v === "lanes") setStageView(v); } catch {} }, []);
   const pickView = (v: "board" | "lanes") => { setStageView(v); try { localStorage.setItem("hw-stage-view", v); } catch {} };
@@ -100,6 +104,12 @@ export default function TodayPage() {
         const wd = await fetchAll<PlayRow>((a, b) => db.from("plays").select("*, legs(*)").in("withdrawal", ["pending", "requested"]).range(a, b));
         setWithdrawals(wd);
       } catch { setWithdrawals(null); }
+      try {
+        const since = new Date(); since.setHours(0, 0, 0, 0);
+        const { data: ag } = await db.from("auto_grades").select("play_id,client_id,graded_at,summary,plays(promo)")
+          .gte("graded_at", since.toISOString()).order("graded_at", { ascending: false });
+        setGrades(((ag || []) as any[]).map(r => ({ play_id: r.play_id, client_id: r.client_id, graded_at: r.graded_at, summary: r.summary, promo: (Array.isArray(r.plays) ? r.plays[0]?.promo : r.plays?.promo) ?? null })));
+      } catch { setGrades([]); }
       await loadMarks();
       setLoaded(true);
     } catch (e: any) {
@@ -108,6 +118,23 @@ export default function TodayPage() {
     }
   }, [loadMarks]);
   useEffect(() => { load(); }, [load]);
+  // Reload when finished games were graded in the background.
+  useEffect(() => {
+    const f = () => load();
+    window.addEventListener(GRADED_EVENT, f);
+    return () => window.removeEventListener(GRADED_EVENT, f);
+  }, [load]);
+
+  const checkScores = async () => {
+    setGrading(true); setGradeMsg(null);
+    const r = await autoGrade(true);
+    setGrading(false);
+    if (!r) { setGradeMsg("Already checking. Give it a few seconds."); return; }
+    if (r.error) { setGradeMsg(`Couldn't check scores: ${r.error}`); return; }
+    setGradeMsg(r.checked === 0 ? "No finished games waiting on a result."
+      : `Checked ${r.checked} finished game${r.checked === 1 ? "" : "s"}: graded ${r.graded}${r.left ? `, ${r.left} still need${r.left === 1 ? "s" : ""} you (props, unclear names, or no final score yet)` : ""}.`);
+    load();
+  };
 
   // Every active client: where they are in the cadence and what's due today.
   const board = useMemo<Entry[]>(() => {
@@ -314,8 +341,22 @@ export default function TodayPage() {
         </Section>
       )}
 
-      <Section id="needs" title="Needs a result" empty="Nothing waiting on a result." count={needs.length}>
+      <Section id="needs" title="Needs a result" empty="Nothing waiting on a result." count={needs.length}
+        sub={gradeMsg || "Finished games are checked against final scores every 15 minutes while Hedgewise is open."}
+        action={<button className="btn-ghost" onClick={checkScores} disabled={grading}>{grading ? "Checking…" : "Check scores"}</button>}>
         {needs.map(p => <NeedsResult key={p.id} play={p} client={clients.get(p.client_id)} onDone={load} />)}
+        {grades.length > 0 && (
+          <div className="done-list">
+            <div className="task-sub" style={{ padding: "8px 14px" }}>Graded from final scores today. If one is wrong, open the play on the client page and tap Reopen.</div>
+            {grades.map(g => (
+              <div key={g.play_id} className="done-row">
+                <Link href={`/clients/${g.client_id}`} style={{ fontWeight: 500 }}>{clients.get(g.client_id)?.name || "Client"}</Link>
+                <span className="task-sub" style={{ flex: 1, minWidth: 160 }}>{g.promo ? `${g.promo} · ` : ""}{g.summary}</span>
+                <span className="status settled">Graded {clock(g.graded_at)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </Section>
 
       <Section id="withdraw" title="Withdrawals" count={wd.length}
@@ -390,14 +431,17 @@ function Count({ label, n, href, hot }: { label: string; n: number | string; hre
   );
 }
 
-function Section({ id, title, count, empty, children, grid, sub, always }: {
-  id: string; title: string; count: number; empty: string; children: React.ReactNode; grid?: boolean; sub?: string; always?: boolean;
+function Section({ id, title, count, empty, children, grid, sub, always, action }: {
+  id: string; title: string; count: number; empty: string; children: React.ReactNode; grid?: boolean; sub?: string; always?: boolean; action?: React.ReactNode;
 }) {
   return (
     <section id={id} style={{ display: "flex", flexDirection: "column", gap: 8, scrollMarginTop: 70 }}>
-      <div>
-        <div className="section-title" style={{ fontSize: 15 }}>{title}{count ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {count}</span> : null}</div>
-        {sub && <div className="task-sub" style={{ marginTop: 2 }}>{sub}</div>}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <div className="section-title" style={{ fontSize: 15 }}>{title}{count ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {count}</span> : null}</div>
+          {sub && <div className="task-sub" style={{ marginTop: 2 }}>{sub}</div>}
+        </div>
+        {action}
       </div>
       {count === 0 && !always
         ? <>{empty && <div className="card" style={{ color: "var(--muted)", fontSize: 13, borderStyle: "dashed", background: "transparent", boxShadow: "none" }}>{empty}</div>}{children}</>

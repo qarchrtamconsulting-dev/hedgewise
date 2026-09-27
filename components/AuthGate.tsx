@@ -2,6 +2,7 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { getDb } from "@/lib/db";
 import { checkNewPassword } from "@/lib/password";
+import { autoGrade } from "@/lib/autograde";
 
 type State = "loading" | "in" | "out" | "recovery" | "error";
 
@@ -54,7 +55,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     return <SetNewPassword onDone={() => { recovering.current = false; setState("in"); }} />;
   }
   if (state === "out") return <Login />;
-  return <>{children}</>;
+  return <><AutoGrader />{children}</>;
 }
 
 function Centered({ children }: { children: ReactNode }) {
@@ -211,4 +212,14 @@ function SetNewPassword({ onDone }: { onDone: () => void }) {
       </form>
     </Centered>
   );
+}
+
+/** While signed in: grade finished games from final scores now and every 15 minutes the site stays open. */
+function AutoGrader() {
+  useEffect(() => {
+    autoGrade();
+    const t = setInterval(() => autoGrade(), 15 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+  return null;
 }
