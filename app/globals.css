@@ -405,3 +405,21 @@ table.data .r { text-align: right; }
 .book-name { font-weight: 600; width: 84px; flex-shrink: 0; }
 .money-line { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--text-2); }
 .money-line.total { font-size: 16px; font-weight: 650; color: var(--text); padding-top: 8px; border-top: 1px solid var(--border); }
+
+/* ─── Money ────────────────────────────────────────────────── */
+.money-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.collect-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 14px 16px; }
+.collect-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 90px 120px auto; gap: 10px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--border); font-size: 13px; }
+.collect-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.collect-main a:hover { text-decoration: underline; }
+.collect-amt { text-align: right; font-weight: 600; }
+.collect-act { display: flex; gap: 6px; justify-content: flex-end; }
+.collect-log { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.collect-foot { display: flex; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--border); font-size: 13px; }
+.ref-row { display: flex; gap: 10px; align-items: flex-start; padding-top: 8px; border-top: 1px solid var(--border); }
+@media (max-width: 900px) { .money-grid { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .collect-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .collect-row .status { grid-column: 1; }
+  .collect-act { grid-column: 1 / -1; justify-content: flex-start; }
+}
