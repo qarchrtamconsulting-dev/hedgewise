@@ -119,8 +119,7 @@ export const money0 = (n: number | null | undefined) => usd0.format(Number(n) ||
 export const pct = (n: number | null | undefined) => `${Math.round((Number(n) || 0) * 1000) / 10}%`;
 export const tone = (n: number) => (n > 0.005 ? "var(--pos)" : n < -0.005 ? "var(--neg)" : "var(--text-2)");
 export const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
-/** Local wall-clock time without a timezone, matching how game times are stored. */
-/** Whole days from a YYYY-MM-DD date to today (local). Day of the first FanDuel bet = day 0. */
+/** Whole days from a YYYY-MM-DD date to today (local). */
 export const daysSince = (iso: string) => {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
   const then = new Date(y, m - 1, d);
@@ -128,12 +127,15 @@ export const daysSince = (iso: string) => {
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return Math.round((start.getTime() - then.getTime()) / 86400000);
 };
+/** A client's FanDuel day: the day of their first FanDuel bet is day 1. */
+export const fanDuelDay = (startedOn: string) => daysSince(startedOn) + 1;
 /** "2026-08-19" -> "Aug 19" (adds the year if it isn't this year). */
 export const shortDate = (iso: string) => {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
   const dt = new Date(y, m - 1, d);
   return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(y !== new Date().getFullYear() ? { year: "numeric" } : {}) });
 };
+/** Local wall-clock time without a timezone, matching how game times are stored. */
 export const localIso = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19);
 
 /** Same formula as the database view and the AS6 sheet. */

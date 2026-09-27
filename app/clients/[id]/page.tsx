@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Client, Leg, MOVE_LABEL, MOVE_SIGN, Movement, MoveType, PLAY_TYPES, Play, Settlement,
-  daysSince, fetchAll, getDb, money, pct, shortDate, today, tone,
+  fanDuelDay, fetchAll, getDb, money, pct, shortDate, today, tone,
 } from "@/lib/db";
 import { BOOKS } from "@/lib/constants";
 import Onboarding from "@/components/Onboarding";
@@ -87,7 +87,7 @@ export default function ClientPage({ params }: { params: { id: string } }) {
           <div>
             <h1 className="page-title">{client.name}</h1>
             <p className="page-sub">
-              {[client.state, startedOn ? `Started ${shortDate(startedOn)} · day ${daysSince(startedOn)}` : "Not started (no FanDuel bet yet)", client.phone, client.split != null ? `${pct(client.split)} client split` : null, client.status === "active" ? "Active" : client.status === "onboarding" ? "Onboarding" : "Inactive"].filter(Boolean).join(" · ") || "No details yet"}
+              {[client.state, startedOn ? `Started ${shortDate(startedOn)} · day ${fanDuelDay(startedOn)}` : "Not started (no FanDuel bet yet)", client.phone, client.split != null ? `${pct(client.split)} client split` : null, client.status === "active" ? "Active" : client.status === "onboarding" ? "Onboarding" : "Inactive"].filter(Boolean).join(" · ") || "No details yet"}
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

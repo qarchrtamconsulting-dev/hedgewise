@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Client, ClientSummary, daysSince, fetchAll, getDb, money, money0, pct, shortDate, tone } from "@/lib/db";
+import { Client, ClientSummary, fanDuelDay, fetchAll, getDb, money, money0, pct, shortDate, tone } from "@/lib/db";
 import { Stage, nextOffer } from "@/lib/playbook";
 
 type Row = Client & ClientSummary & { balance: number; outstanding: number; next_app: string | null };
@@ -169,7 +169,7 @@ export default function ClientsPage() {
                   <td style={{ fontWeight: 500 }}>{c.name}</td>
                   <td style={{ color: "var(--text-2)" }}>{c.state || "—"}</td>
                   <td style={{ color: c.started_on ? "var(--text-2)" : "var(--muted)", whiteSpace: "nowrap" }}>
-                    {c.started_on ? <>{shortDate(c.started_on)} <span style={{ color: "var(--muted)" }}>· day {daysSince(c.started_on)}</span></> : "—"}
+                    {c.started_on ? <>{shortDate(c.started_on)} <span style={{ color: "var(--muted)" }}>· day {fanDuelDay(c.started_on)}</span></> : "—"}
                   </td>
                   <td className="r">{c.split != null ? pct(c.split) : "—"}</td>
                   <td className="r" style={{ color: c.open_plays ? "var(--warn)" : "var(--muted)" }}>{c.open_plays}</td>

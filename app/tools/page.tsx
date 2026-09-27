@@ -33,7 +33,8 @@ export default function ToolsPage() {
 
   const pick = (t: ToolKey) => {
     setTool(t);
-    window.history.replaceState(null, "", `/tools?tool=${t}`);
+    const client = new URLSearchParams(window.location.search).get("client");
+    window.history.replaceState(null, "", `/tools?tool=${t}${client ? `&client=${encodeURIComponent(client)}` : ""}`);
   };
 
   return (

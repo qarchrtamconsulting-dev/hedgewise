@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FinderGame } from "./useGameFinder";
 import { fmt } from "@/lib/constants";
 import { copyText } from "@/lib/clipboard";
-import { Leg, Play, getDb, localIso } from "@/lib/db";
+import { Leg, Play, getDb, localIso, today } from "@/lib/db";
 import Receipt from "./Receipt";
 
 export interface Ticket {
@@ -82,6 +82,14 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
   const clientHedge = Math.max(0, ticket.hedgeStake - mine);
   const firstName = client?.name.split(" ")[0];
 
+  // Coming from a Today checklist item (/tools?client=ID): start with that client picked.
+  useEffect(() => {
+    if (!open || clientId) return;
+    const want = new URLSearchParams(window.location.search).get("client");
+    if (want) setClientId(want);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   useEffect(() => {
     if (!open || clients) return;
     (async () => {
@@ -115,7 +123,7 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
         promo_type: ticket.type,
         book: fixedBookName,
         status: "sent",
-        placed_on: new Date().toISOString().split("T")[0],
+        placed_on: today(),
         notes: `${game.away} at ${game.home}`,
       }).select("*").single();
       if (error) throw error;
