@@ -172,15 +172,22 @@ const GRACE: Partial<Record<TaskKind, number>> = { tsb_match: 3, fd_reward_stack
 
 /** The items that belong to one date. */
 export function tasksOn(c: ClientCadence, plays: CadencePlay[], date: string): Task[] {
-  if (!c.startedOn || c.lane === "quiet" || c.lane === "not_started") return [];
-  const n = dayOn(c.startedOn, date);
-  if (n < 1) return [];
+  if (c.lane === "quiet") return [];
+  const n = c.startedOn ? dayOn(c.startedOn, date) : 0;      // 0 = no FanDuel bet yet
   const ps = plays.filter(counts);
-  // A FanDuel offer logged on this day or later covers a FanDuel item.
-  const fanDuelSince = ps.some(p => p.date! >= date && playedFanDuel(p));
   const out: Task[] = [];
   const add = (t: Omit<Task, "lateDays" | "dueOn" | "day"> & { dueOn?: string }) =>
     out.push({ dueOn: date, day: n, lateDays: 0, ...t });
+
+  // theScore's $250 match follows the first theScore bet, whether or not FanDuel has started.
+  if (c.theScoreMatchOn === date) {
+    add({ kind: "tsb_match", title: "theScore $250 deposit match", detail: "3 days after the first theScore bet", send: "thescore",
+      done: ps.some(p => p.date! >= date && isTheScoreBet(p)) });
+  }
+
+  if (!c.startedOn || n < 1) return out;
+  // A FanDuel offer logged on this day or later covers a FanDuel item.
+  const fanDuelSince = ps.some(p => p.date! >= date && playedFanDuel(p));
 
   if (n === 2) add({ kind: "fd_reward_stack", title: "FanDuel reward stack", detail: "Day 2 · ask for a FanDuel screenshot, then play it", send: "fanduel", done: fanDuelSince });
   if (n === 3) add({ kind: "fd_bet_match", title: "FanDuel $25 bet match", detail: "Day 3", done: fanDuelSince });
@@ -191,11 +198,6 @@ export function tasksOn(c: ClientCadence, plays: CadencePlay[], date: string): T
   if (n >= 2 && n <= PROMO_LAST_DAY && !hasTheScore) {
     add({ kind: "tsb_start", dueOn: c.startedOn, title: "Start theScore",
       detail: n <= 7 ? `Week 1 · day ${n} of 7` : `Usually done in week 1 · now day ${n}`, done: false });
-  }
-
-  if (c.theScoreMatchOn === date) {
-    add({ kind: "tsb_match", title: "theScore $250 deposit match", detail: "3 days after the first theScore bet", send: "thescore",
-      done: ps.some(p => p.date! >= date && isTheScoreBet(p)) });
   }
 
   const wd = weekday(date);

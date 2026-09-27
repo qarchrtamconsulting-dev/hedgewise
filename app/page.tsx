@@ -279,7 +279,7 @@ export default function TodayPage() {
                   <div className="coming-names">
                     {g.list.map(({ e, t: tk }) => (
                       <span key={e.c.id} className="name-chip">
-                        <Link href={`/clients/${e.c.id}`}>{shortNames.get(e.c.id) || e.c.name}</Link> <span className="task-sub">day {tk.day}</span>
+                        <Link href={`/clients/${e.c.id}`}>{shortNames.get(e.c.id) || e.c.name}</Link>{tk.day > 0 && <span className="task-sub"> day {tk.day}</span>}
                       </span>
                     ))}
                   </div>
