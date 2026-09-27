@@ -454,7 +454,8 @@ function Lanes({ board, t }: { board: Entry[]; t: string }) {
     if (cad.lane === "promo") return `day ${cad.day}${cad.nextPromoOn ? ` · $500 ${cad.nextPromoOn === t ? "today" : wd3(cad.nextPromoOn)}` : " · no $500 promo left"}`;
     if (cad.lane === "wrap") return `day ${cad.day} · owes ${money0(e.owes)}`;
     if (cad.lane === "quiet") return `quiet ${cad.quietDays}d · owes ${money0(e.owes)}`;
-    return cad.lastPlay ? `last play ${dayLabel(cad.lastPlay)}` : "no plays yet";
+    if (cad.lastPlay) return `last play ${dayLabel(cad.lastPlay)}`;
+    return e.plays.length ? `${e.plays.length} play${e.plays.length === 1 ? "" : "s"}, none on FanDuel` : "no plays yet";
   };
   const order = (lane: Lane) => (a: Entry, b: Entry) =>
     lane === "wrap" ? b.owes - a.owes
