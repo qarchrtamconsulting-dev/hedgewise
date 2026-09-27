@@ -288,3 +288,10 @@ table.data .r { text-align: right; }
   .topbar { padding: 0 16px; gap: 16px; }
   .page { padding: 16px; }
 }
+
+/* ─── Account menu ─────────────────────────────────────────── */
+.account-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 20;
+  width: 280px; max-width: calc(100vw - 32px); padding: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
