@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Client, Leg, MOVE_LABEL, MOVE_SIGN, Movement, MoveType, PLAY_TYPES, Play, Settlement,
-  fetchAll, getDb, money, pct, today, tone,
+  daysSince, fetchAll, getDb, money, pct, shortDate, today, tone,
 } from "@/lib/db";
 import { BOOKS } from "@/lib/constants";
 import Onboarding from "@/components/Onboarding";
@@ -52,6 +52,20 @@ export default function ClientPage({ params }: { params: { id: string } }) {
     return m;
   }, [legs]);
 
+  // Start date = first day with a FanDuel bet on any non-void play (same rule as client_summary.started_on).
+  const startedOn = useMemo(() => {
+    let first: string | null = null;
+    plays.forEach(p => {
+      if (p.status === "void") return;
+      (legsBy.get(p.id) || []).forEach(l => {
+        if (l.book !== "FanDuel") return;
+        const d = (p.placed_on || l.event_time || "").slice(0, 10);
+        if (d && (!first || d < first)) first = d;
+      });
+    });
+    return first as string | null;
+  }, [plays, legsBy]);
+
   const stats = useMemo(() => {
     let profit = 0, clientShare = 0;
     plays.forEach(p => { if (p.status === "settled") { profit += Number(p.profit) || 0; clientShare += Number(p.client_share) || 0; } });
@@ -72,7 +86,7 @@ export default function ClientPage({ params }: { params: { id: string } }) {
           <div>
             <h1 className="page-title">{client.name}</h1>
             <p className="page-sub">
-              {[client.state, client.phone, client.split != null ? `${pct(client.split)} client split` : null, client.status === "active" ? "Active" : client.status === "onboarding" ? "Onboarding" : "Inactive"].filter(Boolean).join(" · ") || "No details yet"}
+              {[client.state, startedOn ? `Started ${shortDate(startedOn)} · day ${daysSince(startedOn)}` : "Not started (no FanDuel bet yet)", client.phone, client.split != null ? `${pct(client.split)} client split` : null, client.status === "active" ? "Active" : client.status === "onboarding" ? "Onboarding" : "Inactive"].filter(Boolean).join(" · ") || "No details yet"}
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

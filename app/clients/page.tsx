@@ -1,17 +1,18 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Client, ClientSummary, fetchAll, getDb, money, money0, pct, tone } from "@/lib/db";
+import { Client, ClientSummary, daysSince, fetchAll, getDb, money, money0, pct, shortDate, tone } from "@/lib/db";
 import { Stage, nextOffer } from "@/lib/playbook";
 
 type Row = Client & ClientSummary & { balance: number; outstanding: number; next_app: string | null };
-type SortKey = "next_app" | "status" | "outstanding" | "name" | "state" | "split" | "open_plays" | "settled_plays" | "profit" | "your_share" | "received" | "balance" | "loan_outstanding" | "last_play";
+type SortKey = "next_app" | "status" | "outstanding" | "name" | "state" | "split" | "open_plays" | "settled_plays" | "profit" | "your_share" | "received" | "balance" | "loan_outstanding" | "last_play" | "started_on";
 type Filter = "active" | "onboarding" | "open" | "loan" | "all";
 
 const COLS: { key: SortKey; label: string; right?: boolean }[] = [
   { key: "status", label: "Active" },
   { key: "name", label: "Client" },
   { key: "state", label: "State" },
+  { key: "started_on", label: "Started" },
   { key: "split", label: "Split", right: true },
   { key: "open_plays", label: "Open", right: true },
   { key: "settled_plays", label: "Settled", right: true },
@@ -48,7 +49,7 @@ export default function ClientsPage() {
         cb.forEach(r => { const m = booksBy.get(r.client_id) || {}; m[r.offer] = r.stage; booksBy.set(r.client_id, m); });
       } catch {}
       setRows(clients.map(c => {
-        const s = byId.get(c.id) || ({ open_plays: 0, settled_plays: 0, profit: 0, client_share: 0, your_share: 0, received: 0, loan_outstanding: 0, last_play: null } as any);
+        const s = byId.get(c.id) || ({ open_plays: 0, settled_plays: 0, profit: 0, client_share: 0, your_share: 0, received: 0, loan_outstanding: 0, last_play: null, started_on: null } as any);
         const n = (x: any) => Number(x) || 0;
         return { ...c, ...s, profit: n(s.profit), client_share: n(s.client_share), your_share: n(s.your_share), received: n(s.received), loan_outstanding: n(s.loan_outstanding), open_plays: n(s.open_plays), settled_plays: n(s.settled_plays), balance: n(s.your_share) - n(s.received),
           // What the client has out with you: loan fronted + your share they haven't sent yet (sheet: Total Loan + column AN)
@@ -167,6 +168,9 @@ export default function ClientsPage() {
                   </td>
                   <td style={{ fontWeight: 500 }}>{c.name}</td>
                   <td style={{ color: "var(--text-2)" }}>{c.state || "—"}</td>
+                  <td style={{ color: c.started_on ? "var(--text-2)" : "var(--muted)", whiteSpace: "nowrap" }}>
+                    {c.started_on ? <>{shortDate(c.started_on)} <span style={{ color: "var(--muted)" }}>· day {daysSince(c.started_on)}</span></> : "—"}
+                  </td>
                   <td className="r">{c.split != null ? pct(c.split) : "—"}</td>
                   <td className="r" style={{ color: c.open_plays ? "var(--warn)" : "var(--muted)" }}>{c.open_plays}</td>
                   <td className="r" style={{ color: "var(--text-2)" }}>{c.settled_plays}</td>
