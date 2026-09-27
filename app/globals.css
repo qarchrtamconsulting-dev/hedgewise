@@ -529,3 +529,10 @@ table.data .r { text-align: right; }
 .pb-leak { display: flex; gap: 12px; align-items: flex-start; }
 @media (max-width: 1100px) { .pb-stages { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .pb-stages { grid-template-columns: 1fr; } }
+
+/* ─── Risk-free second leg form ────────────────────────────── */
+.second-leg { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.second-leg-row { display: grid; grid-template-columns: 80px minmax(90px, 1fr) minmax(130px, 1.6fr) 100px 100px 110px; gap: 6px; align-items: center; }
+.second-leg-row .label { margin: 0; }
+.second-leg-row .input { padding: 6px 8px; font-size: 13px; }
+@media (max-width: 760px) { .second-leg-row { grid-template-columns: 1fr 1fr; } .second-leg-row .label { grid-column: 1 / -1; } }

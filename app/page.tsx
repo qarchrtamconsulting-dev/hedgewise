@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Client, ClientSummary, Leg, Play, fetchAll, getDb, money, money0, today } from "@/lib/db";
-import { settlePlay, Winner } from "@/lib/settle";
+import { isRiskFree, settlePlay, waitingOnSecondLeg, Winner } from "@/lib/settle";
+import { toDec } from "@/lib/constants";
 import { copyText } from "@/lib/clipboard";
 import { GRADED_EVENT, autoGrade } from "@/lib/autograde";
 import Receipt from "@/components/Receipt";
@@ -247,10 +248,16 @@ export default function TodayPage() {
   }, [board, rows, zero, t]);
 
   const now = Date.now();
-  const needs = useMemo(() => open.filter(p => { const s = startOf(p); return s && now - s.getTime() > GAME_LENGTH_H * 3600e3; })
-    .sort((a, b) => (startOf(a)!.getTime()) - (startOf(b)!.getTime())), [open, now]);
-  const upcoming = useMemo(() => open.filter(p => !needs.includes(p))
-    .sort((a, b) => (startOf(a)?.getTime() ?? 9e15) - (startOf(b)?.getTime() ?? 9e15)), [open, needs]);
+  // Risk-free bets whose first leg lost stay open until the bonus-bet second leg is logged.
+  const waiting = useMemo(() => open.filter(p => waitingOnSecondLeg(p, p.legs)), [open]);
+  const needs = useMemo(() => open.filter(p => {
+    if (waiting.includes(p)) return false;
+    const pending = p.legs.filter(l => l.result === "pending" && l.event_time).map(l => new Date(l.event_time as string).getTime());
+    const s = pending.length ? Math.max(...pending) : startOf(p)?.getTime();
+    return s != null && now - s > GAME_LENGTH_H * 3600e3;
+  }).sort((a, b) => (startOf(a)!.getTime()) - (startOf(b)!.getTime())), [open, waiting, now]);
+  const upcoming = useMemo(() => open.filter(p => !needs.includes(p) && !waiting.includes(p))
+    .sort((a, b) => (startOf(a)?.getTime() ?? 9e15) - (startOf(b)?.getTime() ?? 9e15)), [open, needs, waiting]);
 
   // Checking items off: saved right away; a text link updates the list after Messages opens.
   const onMark: OnMark = (list, status, fromLink) => {
@@ -358,6 +365,13 @@ export default function TodayPage() {
           </div>
         )}
       </Section>
+
+      {waiting.length > 0 && (
+        <Section id="second-leg" title="Risk-free: second leg to place" count={waiting.length} empty=""
+          sub="The first leg lost, so the book owes a bonus bet. These stay open until the second leg is logged and settled.">
+          {waiting.map(p => <SecondLeg key={p.id} play={p} client={clients.get(p.client_id)} onDone={load} />)}
+        </Section>
+      )}
 
       <Section id="withdraw" title="Withdrawals" count={wd.length}
         empty={withdrawals === null ? "Run supabase/today.sql in Supabase to turn on the withdrawal queue." : "No withdrawals to chase."}>
@@ -603,10 +617,111 @@ function laneOrder(lane: Lane) {
     : (a.cad.day || 0) - (b.cad.day || 0);
 }
 
+// ─── Risk-free second leg ─────────────────────────────────────
+function SecondLeg({ play, client, onDone }: { play: PlayRow; client?: Client; onDone: () => void }) {
+  const firstPromo = play.legs.find(l => l.side === "promo");
+  const firstHedge = play.legs.find(l => l.side === "hedge");
+  const bonus = Number(firstPromo?.cash_stake) || Number(firstPromo?.credit_stake) || 0;
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({
+    pBook: firstPromo?.book || "", pSel: "", pOdds: "", pAmt: bonus ? String(bonus) : "", pPay: "",
+    hBook: firstHedge?.book || "DraftKings", hSel: "", hOdds: "", hCash: "", hPay: "", self: false, when: "",
+  });
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const set = (k: keyof typeof f) => (e: any) => setF(x => ({ ...x, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
+  const num = (v: string) => parseFloat(v) || 0;
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  // Bonus bet: the stake isn't returned, so it pays stake x (decimal - 1). Hedge pays stake x decimal.
+  const pd = toDec(f.pOdds), hd = toDec(f.hOdds);
+  const pPay = f.pPay !== "" ? num(f.pPay) : pd ? r2(num(f.pAmt) * (pd - 1)) : 0;
+  const hPay = f.hPay !== "" ? num(f.hPay) : hd ? r2(num(f.hCash) * hd) : 0;
+  const first = client ? client.name.split(" ")[0] : "them";
+
+  const save = async () => {
+    if (!f.pSel.trim() || !f.hSel.trim() || !num(f.pAmt)) { setErr("Add both teams and the bonus amount."); return; }
+    setBusy(true); setErr(null);
+    try {
+      const db = await getDb();
+      const event_time = f.when ? `${f.when}:00` : null;
+      const rows = [
+        { play_id: play.id, seq: 2, side: "promo", book: f.pBook || null, self_hedge: false, selection: f.pSel.trim(), odds: f.pOdds.trim() || null,
+          cash_stake: 0, credit_stake: r2(num(f.pAmt)), payout: pPay, result: "pending", event_time },
+        { play_id: play.id, seq: 2, side: "hedge", book: f.hBook || null, self_hedge: f.self, selection: f.hSel.trim(), odds: f.hOdds.trim() || null,
+          cash_stake: r2(num(f.hCash)), credit_stake: 0, payout: hPay, result: "pending", event_time },
+      ];
+      const { error } = await db.from("legs").insert(rows);
+      if (error) throw error;
+      if (f.self && num(f.hCash) > 0) {
+        const { error: e2 } = await db.from("capital_movements").insert({ client_id: play.client_id, play_id: play.id, type: "self_hedge_stake",
+          amount: r2(num(f.hCash)), date: today(), notes: `Self hedge: ${play.promo || "risk-free"} second leg` });
+        if (e2) throw e2;
+      }
+      onDone();
+    } catch (e: any) { setErr(e?.message || "Could not save."); setBusy(false); }
+  };
+
+  return (
+    <div className="task">
+      <div className="task-main">
+        <div className="task-title"><Link href={`/clients/${play.client_id}`}>{client?.name || "Client"}</Link><span className="task-sub">{play.promo}</span></div>
+        <div className="task-lines">
+          First leg lost{firstPromo?.selection ? ` (${firstPromo.selection})` : ""}. Bonus bet of <b className="num">{money(bonus)}</b> on {firstPromo?.book || "the promo book"} to play.
+        </div>
+        {open && (
+          <div className="second-leg">
+            <div className="second-leg-row">
+              <span className="label">Bonus bet</span>
+              <input className="input" placeholder="Book" value={f.pBook} onChange={set("pBook")} />
+              <input className="input" placeholder="Team / pick" value={f.pSel} onChange={set("pSel")} />
+              <input className="input num" placeholder="Odds +250" value={f.pOdds} onChange={set("pOdds")} />
+              <input className="input num" placeholder="Bonus $" value={f.pAmt} onChange={set("pAmt")} inputMode="decimal" />
+              <input className="input num" placeholder={`Pays ${pPay ? money(pPay) : "$"}`} value={f.pPay} onChange={set("pPay")} inputMode="decimal" />
+            </div>
+            <div className="second-leg-row">
+              <span className="label">Hedge</span>
+              <input className="input" placeholder="Book" value={f.hBook} onChange={set("hBook")} />
+              <input className="input" placeholder="Team / pick" value={f.hSel} onChange={set("hSel")} />
+              <input className="input num" placeholder="Odds -300" value={f.hOdds} onChange={set("hOdds")} />
+              <input className="input num" placeholder="Cash $" value={f.hCash} onChange={set("hCash")} inputMode="decimal" />
+              <input className="input num" placeholder={`Pays ${hPay ? money(hPay) : "$"}`} value={f.hPay} onChange={set("hPay")} inputMode="decimal" />
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <input className="input" type="datetime-local" value={f.when} onChange={set("when")} style={{ width: 210 }} aria-label="Game time" />
+              <label className="tog"><input type="checkbox" checked={f.self} onChange={set("self")} style={{ accentColor: "var(--accent)" }} /><span className="task-sub">Hedge in my account</span></label>
+              <button className="btn-primary" style={{ width: "auto", padding: "7px 14px" }} onClick={save} disabled={busy}>{busy ? "Saving…" : "Save second leg"}</button>
+              <button className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
+            </div>
+            <div className="task-sub">Both bets go on this play as pair 2. It closes once pair 2 has a result (graded from the final score when it can be).</div>
+          </div>
+        )}
+        {err && <div style={{ color: "var(--neg)", fontSize: 12 }}>{err}</div>}
+      </div>
+      {!open && (
+        <div className="task-actions">
+          <Link className="btn-ghost" href={`/tools?tool=freebet&client=${play.client_id}`}>Find a game</Link>
+          <button className="btn-primary" style={{ width: "auto", padding: "7px 14px" }} onClick={() => setOpen(true)}>Log second leg</button>
+        </div>
+      )}
+      {!open && <div className="task-sub" style={{ flexBasis: "100%" }}>Find a game to size it, then log it here so it stays on this play{first ? ` for ${first}` : ""}.</div>}
+    </div>
+  );
+}
+
 // ─── Results and withdrawals ──────────────────────────────────
 function NeedsResult({ play, client, onDone }: { play: PlayRow; client?: Client; onDone: () => void }) {
   const seqs = Array.from(new Set(play.legs.map(l => l.seq))).sort((a, b) => a - b);
-  const [picks, setPicks] = useState<Record<number, Winner>>({});
+  // Pairs that already have a result (e.g. a risk-free first leg) start filled in.
+  const [picks, setPicks] = useState<Record<number, Winner>>(() => {
+    const w: Record<number, Winner> = {};
+    seqs.forEach(q => {
+      const done = play.legs.filter(l => l.seq === q && l.result !== "pending");
+      if (!done.length) return;
+      w[q] = done.some(l => l.result === "void") ? "void" : done.some(l => l.side === "promo" && l.result === "won") ? "promo" : "hedge";
+    });
+    return w;
+  });
+  const riskFree = isRiskFree(play) && seqs.length === 1;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const s = startOf(play);
@@ -626,6 +741,7 @@ function NeedsResult({ play, client, onDone }: { play: PlayRow; client?: Client;
     <div className="task">
       <div className="task-main">
         <div className="task-title"><Link href={`/clients/${play.client_id}`}>{client?.name || "Client"}</Link><span className="task-sub">{play.promo}{s ? ` · started ${ago(s)}` : ""}</span></div>
+        {riskFree && <div className="task-sub">Risk-free: if the promo book loses, it stays open for the bonus-bet second leg.</div>}
         {seqs.length === 0 && <div className="task-lines">No bets recorded. <Link className="link" href={`/clients/${play.client_id}`}>Settle on the client page</Link></div>}
         {seqs.map(q => {
           const promo = play.legs.find(l => l.seq === q && l.side === "promo");
@@ -655,32 +771,20 @@ function NeedsResult({ play, client, onDone }: { play: PlayRow; client?: Client;
 }
 
 function Withdrawal({ play, client, onDone }: { play: PlayRow; client?: Client; onDone: () => void }) {
+  // The client cashes out winnings to their own bank; nothing is sent back to you at this step,
+  // so marking it withdrawn doesn't touch the loan. (Stored as withdrawal = 'received', meaning done.)
   const wins = play.legs.filter(l => l.result === "won" && !l.self_hedge && Number(l.payout) > 0);
-  const total = Number(play.withdrawal_amount) || wins.reduce((t, l) => t + Number(l.payout), 0);
-  const [receiving, setReceiving] = useState(false);
-  const [amount, setAmount] = useState(total.toFixed(2));
   const [err, setErr] = useState<string | null>(null);
   const name = client ? first(client.name) : "there";
   const msg = [`Hey ${name}, ${play.promo ? `the ${play.promo} play` : "your play"} settled.`, "",
     ...wins.map(l => `Please withdraw ${money(l.payout)} from ${l.book}${l.selection ? ` (${l.selection} won)` : ""}.`),
-    "", "Send it over once it lands. Thanks!"].join("\n");
+    "", "Let me know once it's done. Thanks!"].join("\n");
 
   const set = async (patch: any) => {
-    const db = await getDb();
-    const { error } = await db.from("plays").update({ ...patch, withdrawal_updated_at: new Date().toISOString() }).eq("id", play.id);
-    if (error) throw error;
-  };
-  const received = async () => {
-    const amt = parseFloat(amount);
-    if (!amt) return;
     try {
       const db = await getDb();
-      const { error } = await db.from("capital_movements").insert({
-        client_id: play.client_id, play_id: play.id, type: "received_from_client", amount: Math.round(amt * 100) / 100,
-        date: today(), notes: `Withdrawal from ${wins.map(l => l.book).join(" + ") || "book"}${play.promo ? ` (${play.promo})` : ""}`,
-      });
+      const { error } = await db.from("plays").update({ ...patch, withdrawal_updated_at: new Date().toISOString() }).eq("id", play.id);
       if (error) throw error;
-      await set({ withdrawal: "received" });
       onDone();
     } catch (e: any) { setErr(e?.message || "Could not save."); }
   };
@@ -697,27 +801,16 @@ function Withdrawal({ play, client, onDone }: { play: PlayRow; client?: Client; 
           {wins.map(l => <div key={l.id}>Withdraw <b className="num">{money(l.payout)}</b> from {l.book}{l.selection ? ` · ${l.selection} won` : ""}</div>)}
           <div className="task-sub">{play.promo}{play.settled_on ? ` · settled ${play.settled_on}` : ""}</div>
         </div>
-        {receiving && (
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
-            <span className="task-sub">Amount received</span>
-            <input className="input num" value={amount} onChange={e => setAmount(e.target.value)} style={{ width: 130 }} inputMode="decimal" />
-            <button className="btn-primary" style={{ width: "auto", padding: "7px 14px" }} onClick={received}>Save</button>
-            <button className="btn-ghost" onClick={() => setReceiving(false)}>Cancel</button>
-            <span className="task-sub">Comes off {client ? first(client.name) : "their"} loan.</span>
-          </div>
-        )}
         {err && <div style={{ color: "var(--neg)", fontSize: 12 }}>{err}</div>}
       </div>
-      {!receiving && (
-        <div className="task-actions">
-          <a className="btn-primary" style={{ width: "auto", padding: "7px 14px", display: "inline-block" }} href={smsHref(client?.phone, msg)}
-             onClick={() => { set({ withdrawal: "requested" }).then(onDone).catch(() => {}); }}>
-            Text {client ? first(client.name) : "client"}
-          </a>
-          <button className="btn-ghost" onClick={() => setReceiving(true)}>Received</button>
-          <button className="btn-ghost" onClick={() => set({ withdrawal: "skipped" }).then(onDone).catch(() => {})}>Skip</button>
-        </div>
-      )}
+      <div className="task-actions">
+        <a className="btn-primary" style={{ width: "auto", padding: "7px 14px", display: "inline-block" }} href={smsHref(client?.phone, msg)}
+           onClick={() => { void set({ withdrawal: "requested" }); }}>
+          Text {client ? first(client.name) : "client"}
+        </a>
+        <button className="btn-ghost" onClick={() => set({ withdrawal: "received" })}>Withdrawn</button>
+        <button className="btn-ghost" onClick={() => set({ withdrawal: "skipped" })}>Skip</button>
+      </div>
     </div>
   );
 }

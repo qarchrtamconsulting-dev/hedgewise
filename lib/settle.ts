@@ -4,6 +4,33 @@ import { Leg, Play, today } from "@/lib/db";
 export type Winner = "promo" | "hedge" | "void";
 
 /**
+ * Risk-free bets: if the promo book loses, the book pays back a bonus bet, so the play stays open until
+ * that second leg is placed and settled. A risk-free play closes on its first leg only when the promo book wins.
+ */
+export function isRiskFree(p: { promo: string | null; promo_type?: string | null }) {
+  const promo = (p.promo || "").toLowerCase();
+  if (/risk ?free/i.test(p.promo_type || "")) return true;
+  if (/\b(rfb|risk.?free|safety ?net|second chance|2nd chance)\b/.test(promo)) return true;
+  if (/\b(fb|free ?bets?|bonus|credit|casino|match|depo|deposit|pb|boost|sgp|min loss|low hold|hedge)\b/.test(promo)) return false;
+  // Signup risk-free offers written as "{book} {amount}": theScore $1k, BetRivers $500, BetMGM $1.5k, Bet365 $1k.
+  const m = /^\s*(tsb|thescore|espn|br|betrivers|mgm|betmgm|bet ?365|365)\s*\$?(\d+(?:\.\d+)?)\s*(k)?\s*$/.exec(promo);
+  if (!m) return false;
+  return parseFloat(m[2]) * (m[3] ? 1000 : 1) >= 500;
+}
+const seqsOf = (legs: Leg[]) => Array.from(new Set(legs.map(l => l.seq))).sort((a, b) => a - b);
+/** A risk-free play whose first leg lost and whose second leg hasn't been logged yet. */
+export function waitingOnSecondLeg(play: Play, legs: Leg[]) {
+  const seqs = seqsOf(legs);
+  if (!isRiskFree(play) || seqs.length !== 1) return false;
+  return legs.some(l => l.seq === seqs[0] && l.side === "promo" && l.result === "lost");
+}
+/** Settling this result would leave a risk-free play open for its second leg. */
+export function staysOpen(play: Play, legs: Leg[], winners: Record<number, Winner>) {
+  const seqs = seqsOf(legs);
+  return isRiskFree(play) && seqs.length === 1 && winners[seqs[0]] === "hedge";
+}
+
+/**
  * Self hedge loan math: the stake went on the loan when the bet was placed.
  * If your self hedge wins, the whole payout comes off the loan; if it loses, the loan stays.
  * A void refunds the stake. Only applies to plays whose self hedge was logged here
@@ -32,7 +59,8 @@ export async function syncSelfHedgeReturns(db: any, play: Play, legs: Leg[], res
  * Settle a play: mark each pair's winner, close the play, apply the self-hedge
  * loan math, and queue a withdrawal when a bet in the client's account won.
  */
-export async function settlePlay(db: any, play: Play, legs: Leg[], winners: Record<number, Winner>, manualProfit: number | null = null) {
+export async function settlePlay(db: any, play: Play, legs: Leg[], winners: Record<number, Winner>, manualProfit: number | null = null,
+  opts: { force?: boolean } = {}) {
   const results: Record<string, Leg["result"]> = {};
   for (const l of legs) {
     const w = winners[l.seq] || "promo";
@@ -43,6 +71,8 @@ export async function settlePlay(db: any, play: Play, legs: Leg[], winners: Reco
       if (error) throw error;
     }
   }
+  // Risk-free bet whose promo leg lost: record the first leg, keep the play open for the second leg.
+  if (!opts.force && staysOpen(play, legs, winners)) return results;
   const patch: any = { status: "settled", settled_on: play.settled_on || today() };
   if (manualProfit != null) patch.profit_override = manualProfit;
   const { error } = await db.from("plays").update(patch).eq("id", play.id);

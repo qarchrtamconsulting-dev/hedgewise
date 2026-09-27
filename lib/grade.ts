@@ -23,6 +23,7 @@ export interface GradeLeg {
   selection: string | null;
   event_time: string | null;      // local wall-clock time, no zone
   odds_event_id?: string | null;
+  result?: string | null;         // pending | won | lost | void
 }
 export interface GradePlay { placed_on: string | null; notes?: string | null }
 
@@ -162,6 +163,13 @@ export function gradePlay(play: GradePlay, legs: GradeLeg[], events: ScoreEvent[
   const winners: Record<number, Pick> = {};
   const lines: string[] = [];
   for (const q of seqs) {
+    // A pair that already has a result keeps it (e.g. a risk-free first leg graded days ago).
+    const done = legs.filter(l => l.seq === q && l.result && l.result !== "pending");
+    if (done.length) {
+      const pick: Pick = done.some(l => l.result === "void") ? "void" : done.some(l => l.side === "promo" && l.result === "won") ? "promo" : "hedge";
+      winners[q] = pick;
+      continue;
+    }
     const promo = legs.find(l => l.seq === q && l.side === "promo" && l.selection);
     const hedge = legs.find(l => l.seq === q && l.side === "hedge" && l.selection) || null;
     if (!promo) return null;
@@ -172,5 +180,6 @@ export function gradePlay(play: GradePlay, legs: GradeLeg[], events: ScoreEvent[
     winners[q] = g.pick;
     lines.push(seqs.length > 1 ? `Pair ${q}: ${g.summary}` : g.summary);
   }
+  if (!lines.length) return null;          // nothing new to grade
   return { winners, summary: lines.join("; ") };
 }

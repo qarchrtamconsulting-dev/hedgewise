@@ -10,7 +10,7 @@ import Onboarding from "@/components/Onboarding";
 import Receipt from "@/components/Receipt";
 import ClientOverview from "@/components/Journey";
 import { dayOn } from "@/lib/cadence";
-import { settlePlay, syncSelfHedgeReturns } from "@/lib/settle";
+import { settlePlay, syncSelfHedgeReturns, waitingOnSecondLeg } from "@/lib/settle";
 
 const ALL_BOOKS = [...BOOKS, "ESPN Bet"];
 
@@ -284,11 +284,12 @@ function PlayDetail({ play, legs, client, reload }: { play: Play; legs: Leg[]; c
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const settle = async () => {
+  const waiting = play.status === "open" && waitingOnSecondLeg(play, legs);
+  const settle = async (force = false) => {
     setBusy(true); setErr(null);
     try {
       const db = await getDb();
-      await settlePlay(db, play, legs, winners, legs.length === 0 ? parseFloat(profitManual) || 0 : null);
+      await settlePlay(db, play, legs, winners, legs.length === 0 ? parseFloat(profitManual) || 0 : null, { force });
       reload();
     } catch (e: any) { setErr(e?.message || "Could not settle."); }
     setBusy(false);
@@ -319,7 +320,7 @@ function PlayDetail({ play, legs, client, reload }: { play: Play; legs: Leg[]; c
   const withdrawMsg = winning.length
     ? [`Hey ${client.name.split(" ")[0]}, ${play.promo ? `the ${play.promo} play` : "your play"} settled.`, "",
        ...winning.map(l => `Please withdraw ${money(l.payout)} from ${l.book}${l.selection ? ` (${l.selection} won)` : ""}.`),
-       "", "Send it over once it lands. Thanks!"].join("\n")
+       "", "Let me know once it's done. Thanks!"].join("\n")
     : "";
 
   return (
@@ -369,9 +370,15 @@ function PlayDetail({ play, legs, client, reload }: { play: Play; legs: Leg[]; c
               <input className="input num" value={profitManual} onChange={e => setProfitManual(e.target.value)} style={{ width: 140 }} />
             </div>
           )}
-          <button className="btn-primary" style={{ width: "auto" }} onClick={settle} disabled={busy}>
+          <button className="btn-primary" style={{ width: "auto" }} onClick={() => settle()} disabled={busy}>
             {play.status === "settled" ? "Update result" : "Settle play"}
           </button>
+        </div>
+      )}
+      {waiting && (
+        <div className="banner" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <span>Risk-free bet: the first leg lost, so it stays open until the bonus-bet second leg is logged (from Today) and settled.</span>
+          <button className="btn-ghost" onClick={() => settle(true)} disabled={busy}>Close anyway</button>
         </div>
       )}
 

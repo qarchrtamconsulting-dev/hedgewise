@@ -1,6 +1,6 @@
 "use client";
 import { Leg, Play, getDb } from "@/lib/db";
-import { settlePlay } from "@/lib/settle";
+import { settlePlay, staysOpen, waitingOnSecondLeg } from "@/lib/settle";
 import { gradePlay } from "@/lib/grade";
 import type { ScoreEvent } from "@/lib/grade";
 
@@ -35,9 +35,13 @@ export async function autoGrade(force = false): Promise<GradeRun | null> {
     const { data, error } = await db.from("plays").select("*, legs(*)").eq("status", "open");
     if (error) throw error;
     const now = Date.now();
+    // Due: every pair still waiting on a result has finished, within the 3 days the scores feed covers.
     const due = ((data || []) as PlayRow[]).filter(p => {
-      const s = startMs(p);
-      return s != null && now - s > GAME_LENGTH_MS && now - s < MAX_AGE_MS && p.legs.length > 0;
+      if (!p.legs.length || waitingOnSecondLeg(p, p.legs)) return false;
+      const pending = p.legs.filter(l => l.result === "pending" && l.event_time).map(l => new Date(l.event_time as string).getTime());
+      const times = pending.length ? pending : [startMs(p)].filter((x): x is number => x != null);
+      if (!times.length) return false;
+      return now - Math.max(...times) > GAME_LENGTH_MS && now - Math.min(...times) < MAX_AGE_MS;
     });
     if (!due.length) return { checked: 0, graded: 0, left: 0 };
 
@@ -57,8 +61,10 @@ export async function autoGrade(force = false): Promise<GradeRun | null> {
     for (const p of due) {
       const g = gradePlay(p, p.legs, events, local => new Date(local).getTime());
       if (!g) continue;
+      const open = staysOpen(p, p.legs, g.winners);
       await settlePlay(db, p, p.legs, g.winners);
-      await db.from("auto_grades").upsert({ play_id: p.id, client_id: p.client_id, summary: g.summary, graded_at: new Date().toISOString() }, { onConflict: "play_id" });
+      const summary = open ? `First leg: ${g.summary} · risk-free, waiting on the second leg` : g.summary;
+      await db.from("auto_grades").upsert({ play_id: p.id, client_id: p.client_id, summary, graded_at: new Date().toISOString() }, { onConflict: "play_id" });
       graded++;
     }
     if (graded) window.dispatchEvent(new Event(GRADED_EVENT));
