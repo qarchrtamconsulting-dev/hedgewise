@@ -28,7 +28,14 @@ function SignOut() {
   }, []);
   if (!signedIn) return null;
   return (
-    <button className="btn-ghost" onClick={async () => { (await getDb()).auth.signOut(); }}>Sign out</button>
+    <button
+      className="btn-ghost"
+      onClick={async () => {
+        if (!window.confirm("Sign out of Hedgewise on this device?")) return;
+        // "local" signs out only this device; the default ("global") also logs out every other device.
+        (await getDb()).auth.signOut({ scope: "local" });
+      }}
+    >Sign out</button>
   );
 }
 

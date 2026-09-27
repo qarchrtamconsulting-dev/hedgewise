@@ -67,14 +67,22 @@ function Login() {
     <Centered>
       <div className="section-title" style={{ fontSize: 16 }}>Sign in</div>
       <p className="page-sub" style={{ marginBottom: 18 }}>Hedgewise is private. Sign in to continue.</p>
-      <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <form onSubmit={submit} method="post" action="#" autoComplete="on" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div>
-          <span className="label">Email</span>
-          <input className="input" type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          <label className="label" htmlFor="hw-email">Email</label>
+          <input
+            id="hw-email" name="username" className="input" type="email" inputMode="email"
+            autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            value={email} onChange={e => setEmail(e.target.value)} required
+          />
         </div>
         <div>
-          <span className="label">Password</span>
-          <input className="input" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required />
+          <label className="label" htmlFor="hw-password">Password</label>
+          <input
+            id="hw-password" name="password" className="input" type="password"
+            autoComplete="current-password"
+            value={password} onChange={e => setPassword(e.target.value)} required
+          />
         </div>
         <button className="btn-primary" type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
         {err && <div style={{ color: "var(--neg)", fontSize: 12 }}>{err}</div>}
