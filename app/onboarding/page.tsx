@@ -96,11 +96,17 @@ export default function OnboardingPage() {
       const cad = cadenceFor(ps, t);
       const m = (s: Step) => markBy.get(`${c.id}|${s}`) || null;
       const linksSent = ["fd-sb", "dk-sb"].every(k => STAGE_RANK[stageBy.get(`${c.id}|${k}`) || "not_started"] >= 1);
+      // Already funded or playing: the call, form, Venmo and links steps are behind them.
+      const pastIntake = fundBy.has(c.id) || ps.some(p => p.status !== "sent");
+      const step = (s: Step, fromData: boolean): StepState => {
+        const mark = m(s);
+        return { done: !!mark || fromData || pastIntake, date: mark, auto: !mark && (fromData || pastIntake) };
+      };
       const steps: Record<Step, StepState> = {
-        call: { done: !!m("call"), date: m("call"), auto: false },
-        form: { done: !!m("form") || !!c.email, date: m("form") || (c.email && c.created_at ? localDay(c.created_at) : null), auto: !m("form") && !!c.email },
-        venmo: { done: !!m("venmo"), date: m("venmo"), auto: false },
-        links: { done: !!m("links") || linksSent, date: m("links"), auto: !m("links") && linksSent },
+        call: step("call", false),
+        form: step("form", !!c.email),
+        venmo: step("venmo", false),
+        links: step("links", linksSent),
         funded: { done: !!m("funded") || fundBy.has(c.id), date: fundBy.get(c.id) || m("funded"), auto: !m("funded") && fundBy.has(c.id) },
         bet: { done: !!cad.startedOn, date: cad.startedOn, auto: true },
       };

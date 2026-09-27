@@ -5,6 +5,8 @@ import { Client, ClientSummary, Leg, Play, fetchAll, getDb, money, money0, today
 import { settlePlay, Winner } from "@/lib/settle";
 import { copyText } from "@/lib/clipboard";
 import Receipt from "@/components/Receipt";
+import ClientBoard from "@/components/ClientBoard";
+import type { BoardGroup, BoardRow } from "@/components/ClientBoard";
 import {
   KIND_LABEL, KIND_ORDER, addDays, appsFor, cadenceFor, dayLabel, isZeroOutDay, promoAfter, screenshotText,
   tasksForToday, tasksOn, toCadencePlay, weekOneStep, weekdayName,
@@ -67,7 +69,10 @@ export default function TodayPage() {
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [stageView, setStageView] = useState<"board" | "lanes">("board");
   const t = today();
+  useEffect(() => { try { const v = localStorage.getItem("hw-stage-view"); if (v === "board" || v === "lanes") setStageView(v); } catch {} }, []);
+  const pickView = (v: "board" | "lanes") => { setStageView(v); try { localStorage.setItem("hw-stage-view", v); } catch {} };
 
   const loadMarks = useCallback(async () => {
     try {
@@ -160,6 +165,59 @@ export default function TodayPage() {
       return [e.c.id, (n.get(f) || 0) > 1 && l ? `${f} ${l[0]}.` : f];
     }));
   }, [board]);
+
+  // Today A board: one row per client with a 30-day track, grouped by stage, promo days first.
+  const boardGroups = useMemo<BoardGroup[]>(() => {
+    const todoBy = new Map(rows.map(its => [its[0].e.c.id, its]));
+    const zeroBy = new Map(zero.map(i => [i.e.c.id, i]));
+    const toRow = (e: Entry): BoardRow => {
+      const its = todoBy.get(e.c.id) || [];
+      const z = zeroBy.get(e.c.id);
+      const name = first(e.c.name);
+      const sub = [e.c.state, e.cad.day != null ? (e.cad.day < 1 ? `starts ${wd3(e.cad.startedOn!)}` : `day ${e.cad.day}`) : "not started"].filter(Boolean).join(" · ");
+      const base = { id: e.c.id, name: e.c.name, sub, cad: e.cad, plays: e.plays, owes: e.owes };
+      if (its.length) {
+        const top = its[0];
+        const texts = its.filter(i => i.t.send);
+        const text = texts.length ? screenshotText(appsFor(texts.map(i => i.t.send as SendKind)), name) : "";
+        return { ...base,
+          next: `${top.t.title}${top.t.lateDays ? ` · from ${wd3(top.t.dueOn)}` : ""}`,
+          nextSub: its.length > 1 ? `Also: ${its.slice(1).map(i => i.t.title).join(", ")}` : top.t.detail,
+          hot: top.t.kind === "fd_promo" || top.t.kind === "fd_check_in",
+          action: texts.length
+            ? <a className="btn-primary bd-btn" href={smsHref(e.c.phone, text)} title={text} onClick={() => onMark(texts, "texted", true)}>Text {name}</a>
+            : <Link className="btn-ghost bd-btn" href={`/tools?client=${e.c.id}`}>Find a game</Link> };
+      }
+      if (z && z.state === "texted") {
+        return { ...base, next: "FanDuel cash to $0 by midnight", nextSub: "Checked in · confirm when it's $0", hot: true,
+          action: <button className="btn-primary bd-btn" onClick={() => onMark([z], "done")}>At $0</button> };
+      }
+      switch (e.cad.lane) {
+        case "promo":
+          return { ...base, next: e.cad.nextPromoOn ? `$500 promo ${e.cad.nextPromoOn === t ? "today" : dayLabel(e.cad.nextPromoOn)}` : "No $500 promo left", nextSub: "Nothing due today" };
+        case "week1":
+          return { ...base, next: (e.cad.day || 0) < 1 ? `Starts ${dayLabel(e.cad.startedOn!)}` : "All set for today", nextSub: (e.cad.day || 0) >= 1 ? `Week 1 · ${weekOneStep(e.cad.day!)}` : undefined };
+        case "wrap":
+          return { ...base, next: e.owes > 0.5 ? `Collect ${money0(e.owes)}` : "Settled up", nextSub: e.cad.lastPlay ? `Last play ${dayLabel(e.cad.lastPlay)}` : undefined,
+            action: e.owes > 0.5 ? <Link className="btn-ghost bd-btn" href="/money">Collect</Link> : undefined };
+        case "quiet":
+          return { ...base, next: e.cad.lastPlay ? `No play since ${dayLabel(e.cad.lastPlay)}` : "No plays yet", warn: true,
+            action: <a className="btn-ghost bd-btn" href={smsHref(e.c.phone, "")}>Text {name}</a> };
+        default:
+          return { ...base, next: "No FanDuel bet yet", nextSub: "On the Onboarding tab", action: <Link className="btn-ghost bd-btn" href="/onboarding">Onboarding</Link> };
+      }
+    };
+    const G: { lane: Lane; title: string; range: string; rule: string }[] = [
+      { lane: "promo", title: "FanDuel promo days", range: "days 8–30", rule: "$0 FanDuel cash before midnight Mon, Wed, Fri → $500 promo the next day" },
+      { lane: "week1", title: "Week 1", range: "days 1–7", rule: "Min loss, reward stack, $25 bet match, FanDuel promos · start theScore" },
+      { lane: "quiet", title: "Gone quiet", range: "no play in 10+ days", rule: "Stopping before day 21 earns about $580 vs $3,300" },
+      { lane: "wrap", title: "Wrap-up", range: "day 31+", rule: "Withdraw, collect, ask for referrals" },
+      { lane: "not_started", title: "No FanDuel yet", range: "active, no FanDuel bet", rule: "Handled on the Onboarding tab" },
+    ];
+    return G.map(g => ({ key: g.lane, title: g.title, range: g.range, rule: g.rule, hot: g.lane === "promo",
+      rows: board.filter(e => e.cad.lane === g.lane).sort(laneOrder(g.lane)).map(toRow) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board, rows, zero, t]);
 
   const now = Date.now();
   const needs = useMemo(() => open.filter(p => { const s = startOf(p); return s && now - s.getTime() > GAME_LENGTH_H * 3600e3; })
@@ -309,7 +367,16 @@ export default function TodayPage() {
         })}
       </Section>
 
-      <Lanes board={board} t={t} />
+      <section id="stages" style={{ display: "flex", flexDirection: "column", gap: 10, scrollMarginTop: 70 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div className="section-title" style={{ fontSize: 15 }}>Clients by stage</div>
+          <div className="tab-bar">
+            <button className={`tab${stageView === "board" ? " active" : ""}`} onClick={() => pickView("board")}>Board</button>
+            <button className={`tab${stageView === "lanes" ? " active" : ""}`} onClick={() => pickView("lanes")}>Lanes</button>
+          </div>
+        </div>
+        {stageView === "board" ? <ClientBoard groups={boardGroups} /> : <Lanes board={board} t={t} />}
+      </section>
     </div>
   );
 }
@@ -458,17 +525,10 @@ function Lanes({ board, t }: { board: Entry[]; t: string }) {
     if (cad.lastPlay) return `last play ${dayLabel(cad.lastPlay)}`;
     return e.plays.length ? `${e.plays.length} play${e.plays.length === 1 ? "" : "s"}, none on FanDuel` : "no plays yet";
   };
-  const order = (lane: Lane) => (a: Entry, b: Entry) =>
-    lane === "wrap" ? b.owes - a.owes
-    : lane === "quiet" ? (b.cad.quietDays || 0) - (a.cad.quietDays || 0)
-    : lane === "not_started" ? a.c.name.localeCompare(b.c.name)
-    : (a.cad.day || 0) - (b.cad.day || 0);
   return (
-    <section id="stages" style={{ display: "flex", flexDirection: "column", gap: 8, scrollMarginTop: 70 }}>
-      <div className="section-title" style={{ fontSize: 15 }}>Clients by stage</div>
       <div className="lanes">
         {LANES.map(({ lane, title, rule }) => {
-          const list = board.filter(e => e.cad.lane === lane).sort(order(lane));
+          const list = board.filter(e => e.cad.lane === lane).sort(laneOrder(lane));
           if (!list.length && lane === "not_started") return null;
           return (
             <div key={lane} className={`lane${lane === "promo" ? " hot" : ""}`}>
@@ -487,8 +547,16 @@ function Lanes({ board, t }: { board: Entry[]; t: string }) {
           );
         })}
       </div>
-    </section>
   );
+}
+
+/** Order inside a stage: biggest balance first in wrap-up, longest silence first when quiet, else by day. */
+function laneOrder(lane: Lane) {
+  return (a: Entry, b: Entry) =>
+    lane === "wrap" ? b.owes - a.owes
+    : lane === "quiet" ? (b.cad.quietDays || 0) - (a.cad.quietDays || 0)
+    : lane === "not_started" ? a.c.name.localeCompare(b.c.name)
+    : (a.cad.day || 0) - (b.cad.day || 0);
 }
 
 // ─── Results and withdrawals ──────────────────────────────────
