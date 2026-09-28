@@ -72,6 +72,7 @@ function selections(game: any): Map<string, Sel> {
       for (const o of m.outcomes || []) {
         const point = typeof o.point === "number" ? o.point : null;
         if (family !== "ml" && point == null) continue;
+        if (!(o.price > 1.01)) continue;   // dead or off-the-board lines (1.00) break the math
         const label = family === "ml" ? o.name : family === "spread" ? `${o.name} ${pt(point!)}` : `${o.name} ${point}`;
         const k = `${family}|${label}`;
         if (!out.has(k)) out.set(k, { label, family, name: o.name, point, books: {} });
