@@ -43,7 +43,7 @@ export function buildMessage(game: FinderGame, fixedBook: string, t: Ticket, fir
   const date = when.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
   const time = when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const lines = [
-    firstName ? `Hey ${firstName}, here's your next play.` : "Here's your next play.",
+    firstName ? `Hey ${firstName}! Here's the next one:` : "Hey! Here's the next one:",
     `${game.away} at ${game.home} · ${date} ${time}`,
     "",
     `${twoLegs ? "1) " : ""}${fixedBook}: ${game.fixedTeam} ${game.fixedAmerican}. Bet ${fmt(t.fixedStake)}${t.fixedNote ? ` (${t.fixedNote})` : ""}`,
@@ -54,25 +54,44 @@ export function buildMessage(game: FinderGame, fixedBook: string, t: Ticket, fir
       ...(game.hedgeLink ? [game.hedgeLink] : []),
     ]),
     "",
-    !twoLegs ? "Place it before game time and send me a screenshot of the bet slip." : "Place both before game time and send me screenshots of each bet slip.",
+    !twoLegs ? "Get it in before the game and send me a screenshot of the slip when you get a sec. Thanks!" : "Get both in before the game and send me a screenshot of each slip when you get a sec. Thanks!",
   ];
   return lines.join("\n");
 }
 
+const IconLog = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 15V3" /><path d="M7 8l5-5 5 5" /><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
+  </svg>
+);
+const IconSend = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
+  </svg>
+);
+
+type Mode = null | "log" | "send";
+
+/**
+ * Two separate actions on each game card:
+ *  - Log to client: saves the play to the client (then check the numbers and confirm).
+ *  - Send to client: opens Messages with the text filled in. Saves nothing.
+ */
 export default function SendTicket({ game, fixedBookName, ticket }: { game: FinderGame; fixedBookName: string; ticket: Ticket }) {
-  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<Mode>(null);
   const [clients, setClients] = useState<ClientRow[] | null>(null);
   const [clientId, setClientId] = useState("");
-  const [log, setLog] = useState(true);
   const [selfHedge, setSelfHedge] = useState(false);
   const [myHedge, setMyHedge] = useState("");            // your part of the hedge when self hedging
   const [showAll, setShowAll] = useState(false);
   const [body, setBody] = useState("");
   const [edited, setEdited] = useState(false);
+  const [showText, setShowText] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [loggedFor, setLoggedFor] = useState<string | null>(null);
-  // The saved-but-unconfirmed play for the current client, shown as a receipt to confirm.
-  const [sent, setSent] = useState<{ play: Play; legs: Leg[]; at: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [texted, setTexted] = useState<string | null>(null);   // client id texted this session
+  // The saved play waiting for you to check the numbers and confirm.
+  const [saved, setSaved] = useState<{ play: Play; legs: Leg[] } | null>(null);
   const boxRef = useRef<HTMLTextAreaElement | null>(null);
 
   const client = useMemo(() => clients?.find(c => c.id === clientId), [clients, clientId]);
@@ -84,14 +103,14 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
 
   // Coming from a Today checklist item (/tools?client=ID): start with that client picked.
   useEffect(() => {
-    if (!open || clientId) return;
+    if (!mode || clientId) return;
     const want = new URLSearchParams(window.location.search).get("client");
     if (want) setClientId(want);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [mode]);
 
   useEffect(() => {
-    if (!open || clients) return;
+    if (!mode || clients) return;
     (async () => {
       try {
         const { data, error } = await (await db()).from("clients").select("id,name,phone,approved_books,status").order("name");
@@ -101,20 +120,19 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
         setClients([]);
       }
     })();
-  }, [open, clients]);
+  }, [mode, clients]);
 
-  // Keep the draft in sync until the user edits it by hand.
+  // Keep the text in sync until it's edited by hand.
   const ticketKey = JSON.stringify(ticket);
   useEffect(() => {
     if (!edited) setBody(buildMessage(game, fixedBookName, ticket, firstName, clientHedge));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.id, game.fixedAmerican, game.hedgeAmerican, fixedBookName, ticketKey, firstName, edited, clientHedge]);
 
-  // Sending saves the play as "sent": it shows up as a receipt and only counts once you confirm it.
-  const saveSent = async () => {
-    if (!client || !log) return true;
-    if (loggedFor === client.id) return true; // don't save twice if Messages is opened again
-    setLoggedFor(client.id);
+  const logBet = async () => {
+    if (!client || busy) return;
+    if (saved && saved.play.client_id === client.id) return; // already saved, confirm below
+    setBusy(true); setStatus(null);
     try {
       const sb = await db();
       const { data: play, error } = await sb.from("plays").insert({
@@ -145,106 +163,131 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
       if (mine > 0.005) rows.push(hedgeLeg(mine, true));
       const { data: legs, error: legErr } = await sb.from("legs").insert(rows).select("*");
       if (legErr) { await sb.from("plays").delete().eq("id", play!.id); throw legErr; }
-      setSent({ play: play as Play, legs: (legs || []) as Leg[], at: new Date().toISOString() });
-      setStatus(null);
-      return true;
+      setSaved({ play: play as Play, legs: (legs || []) as Leg[] });
     } catch (e: any) {
-      setLoggedFor(null);
       setStatus(`Couldn't save for ${client.name}: ${e?.message || "database error"}`);
-      return false;
     }
+    setBusy(false);
   };
-
-  // Messages opens from a real link click (browsers block app launches that
-  // happen after an await); logging runs in the background.
-  const onOpenMessages = () => { void saveSent(); };
 
   const copy = async () => {
     const ok = await copyText(body, boxRef.current);
-    setStatus(ok ? "Message copied" : "Text selected. Press Cmd+C to copy");
-    void saveSent();
+    setStatus(ok ? "Text copied. Nothing logged." : "Text selected. Press Cmd+C to copy");
   };
 
-  if (!open) {
-    return (
-      <button className="btn-ghost" onClick={() => setOpen(true)}>Send to client</button>
-    );
-  }
+  const pick = (m: Mode) => { setMode(m); setStatus(null); };
+
+  const actions = (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <button className={mode === "log" ? "btn-primary" : "btn-ghost"} style={{ width: "auto", padding: "8px 14px", display: "inline-flex", alignItems: "center", gap: 8 }}
+        onClick={() => pick(mode === "log" ? null : "log")} aria-pressed={mode === "log"}>
+        <IconLog /> Log to client
+      </button>
+      <button className={mode === "send" ? "btn-primary" : "btn-ghost"} style={{ width: "auto", padding: "8px 14px", display: "inline-flex", alignItems: "center", gap: 8 }}
+        onClick={() => pick(mode === "send" ? null : "send")} aria-pressed={mode === "send"}>
+        <IconSend /> Send to client
+      </button>
+    </div>
+  );
+
+  if (!mode) return actions;
 
   return (
-    <div className="divider" style={{ marginTop: 12, paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 12, alignItems: "end" }}>
-        <div>
-          <span className="label">Client</span>
-          <select className="input" value={clientId} onChange={e => { setClientId(e.target.value); setStatus(null); }}>
-            <option value="">{clients === null ? "Loading…" : listed.length ? (showAll ? "Choose a client" : "Choose an active client") : "No active clients"}</option>
-            {listed.map(c => <option key={c.id} value={c.id}>{c.name}{c.status !== "active" ? " (inactive)" : ""}</option>)}
-          </select>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {actions}
+      <div className="divider" style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "end" }}>
+          <div>
+            <span className="label">Client</span>
+            <select className="input" value={clientId} onChange={e => { setClientId(e.target.value); setStatus(null); }}>
+              <option value="">{clients === null ? "Loading…" : listed.length ? (showAll ? "Choose a client" : "Choose an active client") : "No active clients"}</option>
+              {listed.map(c => <option key={c.id} value={c.id}>{c.name}{c.status !== "active" ? " (inactive)" : ""}</option>)}
+            </select>
+          </div>
+          <label className="tog" style={{ paddingBottom: 8 }}>
+            <input type="checkbox" checked={selfHedge} onChange={e => { setSelfHedge(e.target.checked); setMyHedge(""); setEdited(false); }} style={{ accentColor: "var(--accent)" }} />
+            <span style={{ color: "var(--text-2)", fontSize: 13 }}>Hedge in my account</span>
+          </label>
         </div>
-        <label className="tog" style={{ paddingBottom: 8 }}>
-          <input type="checkbox" checked={log} onChange={e => setLog(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
-          <span style={{ color: "var(--text-2)", fontSize: 13 }}>Save a receipt</span>
+        <label className="tog" style={{ marginTop: -4 }}>
+          <input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
+          <span style={{ color: "var(--muted)", fontSize: 12 }}>Show inactive clients</span>
         </label>
-        <label className="tog" style={{ paddingBottom: 8 }}>
-          <input type="checkbox" checked={selfHedge} onChange={e => { setSelfHedge(e.target.checked); setMyHedge(""); setEdited(false); }} style={{ accentColor: "var(--accent)" }} />
-          <span style={{ color: "var(--text-2)", fontSize: 13 }}>Hedge in my account</span>
-        </label>
-      </div>
-      <label className="tog" style={{ marginTop: -4 }}>
-        <input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} style={{ accentColor: "var(--accent)" }} />
-        <span style={{ color: "var(--muted)", fontSize: 12 }}>Show inactive clients</span>
-      </label>
 
-      {selfHedge && (
-        <div className="card" style={{ background: "var(--surface-2)", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, alignItems: "end" }}>
-          <div>
-            <span className="label">My hedge stake</span>
-            <input className="input num" inputMode="decimal" value={myHedge} placeholder={r2(ticket.hedgeStake).toFixed(2)}
-              onChange={e => { setMyHedge(e.target.value); setEdited(false); }} />
+        {selfHedge && (
+          <div className="card" style={{ background: "var(--surface-2)", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, alignItems: "end" }}>
+            <div>
+              <span className="label">My hedge stake</span>
+              <input className="input num" inputMode="decimal" value={myHedge} placeholder={r2(ticket.hedgeStake).toFixed(2)}
+                onChange={e => { setMyHedge(e.target.value); setEdited(false); }} />
+            </div>
+            <div>
+              <div className="stat-label">Pays if it wins</div>
+              <div className="stat-value num">{fmt(mine * game.hedgeDecimal)}</div>
+            </div>
+            <div>
+              <div className="stat-label">Client hedges</div>
+              <div className="stat-value num">{fmt(clientHedge)}</div>
+            </div>
+            <div>
+              <div className="stat-label">Added to loan</div>
+              <div className="stat-value num">{fmt(mine)}</div>
+            </div>
           </div>
-          <div>
-            <div className="stat-label">Pays if it wins</div>
-            <div className="stat-value num">{fmt(mine * game.hedgeDecimal)}</div>
-          </div>
-          <div>
-            <div className="stat-label">Client hedges</div>
-            <div className="stat-value num">{fmt(clientHedge)}</div>
-          </div>
-          <div>
-            <div className="stat-label">Added to loan</div>
-            <div className="stat-value num">{fmt(mine)}</div>
-          </div>
-        </div>
-      )}
+        )}
 
-      <div>
-        <span className="label">Message</span>
-        <textarea
-          ref={boxRef}
-          className="input" rows={9} value={body}
-          onChange={e => { setBody(e.target.value); setEdited(true); }}
-          style={{ resize: "vertical", fontSize: 13, lineHeight: 1.5 }}
-        />
-      </div>
+        {mode === "send" && (
+          <>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              {client ? (
+                <a className="btn-primary" style={{ width: "auto", padding: "8px 16px", display: "inline-block" }}
+                   href={smsHref(client.phone, body)} onClick={() => { setTexted(client.id); setStatus(null); }}>
+                  Text {firstName}
+                </a>
+              ) : (
+                <button className="btn-primary" style={{ width: "auto", padding: "8px 16px" }} disabled>Pick a client</button>
+              )}
+              <button className="btn-ghost" onClick={() => setShowText(v => !v)}>{showText ? "Hide text" : "See / edit text"}</button>
+              <button className="btn-ghost" onClick={copy}>Copy text</button>
+              {edited && <button className="btn-ghost" onClick={() => setEdited(false)}>Reset text</button>}
+            </div>
+            {showText && (
+              <textarea ref={boxRef} className="input" rows={9} value={body}
+                onChange={e => { setBody(e.target.value); setEdited(true); }}
+                style={{ resize: "vertical", fontSize: 13, lineHeight: 1.5 }} />
+            )}
+            {!showText && <textarea ref={boxRef} value={body} readOnly aria-hidden="true" tabIndex={-1}
+              style={{ position: "absolute", left: -9999, width: 1, height: 1, opacity: 0 }} />}
+            {client && texted === client.id && (
+              <div className="hint" style={{ marginTop: 0 }}>
+                Texted {firstName}. Nothing is logged yet. Once the bet's in,{" "}
+                <button className="link" style={{ background: "none", border: 0, padding: 0, color: "var(--accent)", cursor: "pointer", font: "inherit" }}
+                  onClick={() => pick("log")}>log it to {firstName}</button>.
+              </div>
+            )}
+          </>
+        )}
 
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-        <a className="btn-primary" style={{ width: "auto", padding: "8px 14px", display: "inline-block" }}
-           href={smsHref(client?.phone, body)} onClick={onOpenMessages}>
-          Open in Messages
-        </a>
-        <button className="btn-ghost" onClick={copy}>Copy text</button>
-        {edited && <button className="btn-ghost" onClick={() => setEdited(false)}>Reset</button>}
-        <button className="btn-ghost" onClick={() => { setOpen(false); setStatus(null); }}>Close</button>
+        {mode === "log" && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+            <button className="btn-primary" style={{ width: "auto", padding: "8px 16px" }} onClick={logBet}
+              disabled={!client || busy || (!!saved && saved.play.client_id === client?.id)}>
+              {!client ? "Pick a client" : busy ? "Saving…" : `Log bet for ${firstName}`}
+            </button>
+            <span className="task-sub">Check the numbers below, then confirm.</span>
+          </div>
+        )}
+
         {status && <span style={{ color: "var(--text-2)", fontSize: 12 }}>{status}</span>}
+        {saved && client && saved.play.client_id === client.id && (
+          <Receipt key={saved.play.id} play={saved.play} legs={saved.legs} clientName={client.name}
+            onDone={r => { if (r === "discarded") setSaved(null); }} />
+        )}
+        {client && (client.approved_books?.length ?? 0) > 0 && !client.approved_books!.includes(fixedBookName) && (
+          <div className="hint" style={{ marginTop: 0, color: "var(--warn)" }}>{client.name} isn&apos;t marked as approved on {fixedBookName}.</div>
+        )}
+        {mode === "send" && client && !client.phone && <div className="hint" style={{ marginTop: 0 }}>{client.name} has no phone number saved, so Messages will open without a recipient.</div>}
       </div>
-      {sent && client && sent.play.client_id === client.id && (
-        <Receipt key={sent.play.id} play={sent.play} legs={sent.legs} clientName={client.name} sentAt={sent.at}
-          onDone={r => { if (r === "discarded") setLoggedFor(null); }} />
-      )}
-      {client && (client.approved_books?.length ?? 0) > 0 && !client.approved_books!.includes(fixedBookName) && (
-        <div className="hint" style={{ marginTop: 0, color: "var(--warn)" }}>{client.name} isn't marked as approved on {fixedBookName}.</div>
-      )}
-      {client && !client.phone && <div className="hint" style={{ marginTop: 0 }}>{client.name} has no phone number saved, so Messages will open without a recipient.</div>}
     </div>
   );
 }

@@ -134,7 +134,7 @@ export default function Receipt({ play, legs, clientName, sentAt, onDone }: {
         <div>
           <div className="receipt-title">{clientName ? `${clientName} · ` : ""}{play.promo}</div>
           <div className="task-sub">
-            {play.notes ? `${play.notes} · ` : ""}Sent{when ? ` ${when.toLocaleDateString([], { month: "short", day: "numeric" })} ${when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}
+            {play.notes ? `${play.notes}` : ""}{when ? ` · Sent ${when.toLocaleDateString([], { month: "short", day: "numeric" })} ${when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}
           </div>
         </div>
         <span className="status sent">Not logged yet</span>
