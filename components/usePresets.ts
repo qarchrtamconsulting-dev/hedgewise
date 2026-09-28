@@ -40,18 +40,39 @@ export function usePresets(tool: ToolKey) {
 
   useEffect(() => { load(); }, [load]);
 
-  const save = async (name: string, state: PresetState) => {
+  /** Saves a new preset and returns its id. */
+  const save = async (name: string, state: PresetState): Promise<string | null> => {
     if (mode === "cloud") {
       try {
-        const { error } = await (await db()).from("presets").insert({ tool, name, state });
-        if (!error) return load();
+        const { data, error } = await (await db()).from("presets").insert({ tool, name, state }).select("id").single();
+        if (!error) { await load(); return (data as any)?.id ?? null; }
       } catch {}
       setMode("local");
     }
     const all = readLocal();
-    all.push({ id: `l-${Date.now()}`, tool, name, ...state });
+    const id = `l-${Date.now()}`;
+    all.push({ id, tool, name, ...state });
     writeLocal(all);
-    load();
+    await load();
+    return id;
+  };
+
+  /** Changes a saved preset's settings and/or name. Returns false if it couldn't be saved. */
+  const update = async (id: string, patch: { name?: string; state?: PresetState }): Promise<boolean> => {
+    if (id.startsWith("l-")) {
+      writeLocal(readLocal().map(p => (p.id !== id ? p : { ...p, ...(patch.state || {}), ...(patch.name ? { name: patch.name } : {}) })));
+      await load();
+      return true;
+    }
+    try {
+      const row: Record<string, unknown> = {};
+      if (patch.name) row.name = patch.name;
+      if (patch.state) row.state = patch.state;
+      const { error } = await (await db()).from("presets").update(row).eq("id", id);
+      if (error) return false;
+      await load();
+      return true;
+    } catch { return false; }
   };
 
   const remove = async (id: string) => {
@@ -64,5 +85,5 @@ export function usePresets(tool: ToolKey) {
   };
 
   const builtIn = BUILT_IN.filter(p => p.tool === tool);
-  return { builtIn, saved, mode, save, remove };
+  return { builtIn, saved, mode, save, update, remove };
 }

@@ -12,4 +12,5 @@ CREATE TABLE IF NOT EXISTS presets (
 ALTER TABLE presets ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "anon full access presets" ON presets;
-CREATE POLICY "anon full access presets" ON presets FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "signed in full access" ON presets;
+CREATE POLICY "signed in full access" ON presets FOR ALL TO authenticated USING (true) WITH CHECK (true);
