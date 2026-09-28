@@ -126,7 +126,7 @@ export default function TopBar() {
         ))}
         <More path={path} counts={counts} />
       </nav>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <div className="topbar-right">
         <CommandBar />
         <AccountMenu />
         <ThemeToggle />
