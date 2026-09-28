@@ -25,9 +25,13 @@ function sameState(a: PresetState, b: PresetState) {
 
 type Naming = null | "new" | "rename" | "copy";
 
+// Picking a preset jumps to the results, which unmounts this bar; remember the pick so Back keeps it.
+const lastPick: Partial<Record<ToolKey, string>> = {};
+
 export default function PresetBar({ tool, current, apply, initialName }: Props) {
   const { builtIn, saved, mode, save, update, remove } = usePresets(tool);
-  const [selected, setSelected] = useState<string>("");
+  const [selected, setSelectedState] = useState<string>(() => lastPick[tool] || "");
+  const setSelected = (id: string) => { lastPick[tool] = id; setSelectedState(id); };
   const [naming, setNaming] = useState<Naming>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
