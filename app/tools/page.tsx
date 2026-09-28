@@ -4,7 +4,16 @@ import LowHoldFinder from "@/components/LowHold";
 import FreeBetFinder from "@/components/FreeBetFinder";
 import RiskFreeFinder from "@/components/RiskFreeFinder";
 import ProfitBoostFinder from "@/components/ProfitBoostFinder";
-import { PresetState, ToolKey, readShareParams } from "@/lib/presets";
+import { PresetState, ToolKey, defaultPreset, readShareParams } from "@/lib/presets";
+import { ODDS_BOOKS } from "@/lib/constants";
+
+const HEDGES = ["FanDuel", "DraftKings", "BetMGM", "Caesars", "Fanatics"];
+
+/** A tool's standard setup, with the fixed book swapped for the one picked on the Board. */
+const forBook = (t: ToolKey, book: string): PresetState => {
+  const d = defaultPreset(t);
+  return { config: { ...d.config, fixedBook: book, hedgeBooks: HEDGES.filter(b => b !== book) }, inputs: d.inputs };
+};
 
 const TOOLS: readonly (readonly [ToolKey, string])[] = [
   ["lowhold", "Low Hold"],
@@ -17,24 +26,28 @@ export default function ToolsPage() {
   const [tool, setTool] = useState<ToolKey>("lowhold");
   const [shared, setShared] = useState<{ tool: ToolKey; state: PresetState; name?: string } | null>(null);
   const [linkKey, setLinkKey] = useState(0);
+  const [book, setBook] = useState<string | null>(null);
 
   // Open a shared link: /tools?tool=freebet&s=<preset>
   useEffect(() => {
     const { tool: t, state, name } = readShareParams(window.location.search);
     if (t) setTool(t);
+    // From the Board: /tools?client=ID&book=FanDuel opens every finder on that book.
+    const b = new URLSearchParams(window.location.search).get("book");
+    if (b && ODDS_BOOKS.includes(b) && !state) { setBook(b); setLinkKey(k => k + 1); }
     if (t && state) {
       setShared({ tool: t, state, name });
       setLinkKey(k => k + 1);
     }
   }, []);
 
-  const initialFor = (t: ToolKey) => (shared && shared.tool === t ? shared.state : undefined);
+  const initialFor = (t: ToolKey) => (shared && shared.tool === t ? shared.state : book ? forBook(t, book) : undefined);
   const nameFor = (t: ToolKey) => (shared && shared.tool === t ? shared.name : undefined);
 
   const pick = (t: ToolKey) => {
     setTool(t);
     const client = new URLSearchParams(window.location.search).get("client");
-    window.history.replaceState(null, "", `/tools?tool=${t}${client ? `&client=${encodeURIComponent(client)}` : ""}`);
+    window.history.replaceState(null, "", `/tools?tool=${t}${client ? `&client=${encodeURIComponent(client)}` : ""}${book ? `&book=${encodeURIComponent(book)}` : ""}`);
   };
 
   return (

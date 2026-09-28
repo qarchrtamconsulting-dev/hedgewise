@@ -1,33 +1,43 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AccountMenu from "@/components/AccountMenu";
-import { getDb } from "@/lib/db";
+import CommandBar from "@/components/CommandBar";
+import { today } from "@/lib/db";
+import { loadOps } from "@/lib/ops";
 
-const LINKS = [
-  { href: "/onboarding", label: "Onboarding" },
-  { href: "/", label: "Today" },
-  { href: "/tools", label: "Tools" },
+const PRIMARY = [
+  { href: "/", label: "Board", count: "due" as const },
+  { href: "/tools", label: "Find" },
+  { href: "/money", label: "Money", count: "collect" as const },
+];
+const MORE = [
   { href: "/clients", label: "Clients" },
-  { href: "/money", label: "Money" },
+  { href: "/today", label: "Today checklist" },
+  { href: "/onboarding", label: "Onboarding", count: "leads" as const },
   { href: "/playbook", label: "Playbook" },
 ];
 
-/** How many people aren't live yet: onboarding leads plus active clients with no FanDuel bet. */
-function useLeadCount(path: string) {
-  const [n, setN] = useState<number | null>(null);
+type Counts = { due: number; collect: number; leads: number };
+
+/** What needs you: clients with something due today, clients to collect from, people not live yet. */
+let lastCounts: { at: number; n: Counts } | null = null;
+function useCounts(path: string) {
+  const [n, setN] = useState<Counts | null>(lastCounts?.n || null);
   useEffect(() => {
     let alive = true;
+    if (lastCounts && Date.now() - lastCounts.at < 60_000) { setN(lastCounts.n); return; }
     (async () => {
       try {
-        const db = await getDb();
-        const [{ data: cs }, { data: su }] = await Promise.all([
-          db.from("clients").select("id,status").in("status", ["onboarding", "active"]),
-          db.from("client_summary").select("client_id,started_on"),
-        ]);
-        const started = new Set((su || []).filter((s: any) => s.started_on).map((s: any) => s.client_id));
-        if (alive) setN((cs || []).filter((c: any) => !started.has(c.id)).length);
+        const { entries } = await loadOps(today());
+        const c = {
+          due: entries.filter(e => e.todo.length).length,
+          collect: entries.filter(e => e.collect).length,
+          leads: entries.filter(e => e.lead).length,
+        };
+        lastCounts = { at: Date.now(), n: c };
+        if (alive) setN(c);
       } catch {}
     })();
     return () => { alive = false; };
@@ -66,9 +76,42 @@ function ThemeToggle() {
   );
 }
 
+function More({ path, counts }: { path: string; counts: Counts | null }) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  useEffect(() => { setOpen(false); }, [path]);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent | TouchEvent) => { if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("touchstart", onDown); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  const inMore = MORE.some(l => path.startsWith(l.href));
+  return (
+    <div ref={wrap} className="nav-more">
+      <button className={`nav-link${inMore ? " active" : ""}`} onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="true">
+        More{counts?.leads ? <span className="nav-count"> · {counts.leads}</span> : null}
+      </button>
+      {open && (
+        <div className="card nav-more-menu">
+          {MORE.map(l => (
+            <Link key={l.href} href={l.href} className={path.startsWith(l.href) ? "active" : ""}>
+              <span>{l.label}</span>
+              {l.count && counts?.[l.count] ? <span className="nav-count">{counts[l.count]}</span> : null}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TopBar() {
   const path = usePathname() || "/";
-  const leads = useLeadCount(path);
+  const counts = useCounts(path);
   return (
     <header className="topbar">
       <Link href="/" className="brand">
@@ -76,13 +119,15 @@ export default function TopBar() {
         <span className="brand-name">Hedgewise</span>
       </Link>
       <nav className="nav">
-        {LINKS.map(l => (
+        {PRIMARY.map(l => (
           <Link key={l.href} href={l.href} className={`nav-link${(l.href === "/" ? path === "/" : path.startsWith(l.href)) ? " active" : ""}`}>
-            {l.label}{l.href === "/onboarding" && leads ? <span className="nav-count"> · {leads}</span> : null}
+            {l.label}{l.count && counts?.[l.count] ? <span className="nav-count"> · {counts[l.count]}</span> : null}
           </Link>
         ))}
+        <More path={path} counts={counts} />
       </nav>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <CommandBar />
         <AccountMenu />
         <ThemeToggle />
       </div>
