@@ -15,6 +15,8 @@ interface Props {
   loading: boolean;
   error: string | null;
   updated: string | null;
+  /** When the results were fetched (ms). */
+  updatedAt?: number | null;
   callsLeft: string | null;
   cached: boolean;
   onFetch: () => void;
@@ -29,8 +31,11 @@ interface Props {
 }
 
 export default function FinderShell({
-  title, presetBar, config, setConfig, games: rawGames, loading, error, updated, callsLeft, cached, onFetch, inputs, renderGame, score,
+  title, presetBar, config, setConfig, games: rawGames, loading, error, updated, updatedAt, callsLeft, cached, onFetch, inputs, renderGame, score,
 }: Props) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const i = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(i); }, []);
+  const staleMins = updatedAt ? Math.floor((now - updatedAt) / 60000) : 0;
   const set = (patch: Partial<FinderConfig>) => setConfig({ ...config, ...patch });
   const sorted = score ? [...rawGames].sort((a, b) => score(a) - score(b)) : rawGames;
   // Alternate lines can give one game dozens of pairings: keep the best 2 spreads/totals and the best moneyline per game.
@@ -106,6 +111,12 @@ export default function FinderShell({
           </button>
         </div>
         {error && <div style={{ color: "var(--neg)", fontSize: 12, lineHeight: 1.5 }}>{error}</div>}
+        {staleMins >= 3 && !loading && rawGames.length > 0 && (
+          <div className="card" role="status" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", borderColor: "var(--warn)", padding: "10px 14px" }}>
+            <span style={{ color: "var(--warn)", fontSize: 13 }}>These odds are {staleMins} minutes old. Lines may have moved.</span>
+            <button className="btn-ghost" onClick={onFetch} style={{ padding: "6px 12px" }}>Refresh now</button>
+          </div>
+        )}
         {list}
       </div>
     );

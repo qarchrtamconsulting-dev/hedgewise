@@ -1,5 +1,6 @@
 "use client";
-import { FinderGame } from "./useGameFinder";
+import { useEffect, useState } from "react";
+import { FinderGame, Recheck } from "./useGameFinder";
 
 import SendTicket, { Ticket } from "./SendTicket";
 
@@ -23,6 +24,8 @@ interface Props {
   /** Small supporting facts */
   details?: { label: string; value: string }[];
   ticket?: Ticket;
+  /** Re-price this game from a fresh pull before sending or logging. */
+  recheck?: () => Promise<Recheck>;
 }
 
 const usd = (n: number) => `$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -40,8 +43,15 @@ function when(iso: string) {
   return { text: `${label} ${time}`, rel, soon: mins > 0 && mins < 90 };
 }
 
-function Leg({ role, book, team, odds, stake, tag, oddsNote, link }:
-  { role: "Bet" | "Hedge"; book: string; team: string; odds: string; stake: number; tag?: string; oddsNote?: string; link?: string | null }) {
+/** "updated 2m ago" for a line, amber once it's older than 3 minutes. */
+function age(iso: string | undefined, now: number) {
+  if (!iso) return null;
+  const mins = Math.max(0, Math.floor((now - Date.parse(iso)) / 60000));
+  return { text: mins < 1 ? "updated just now" : `updated ${mins}m ago`, stale: mins >= 3 };
+}
+
+function Leg({ role, book, team, odds, stake, tag, oddsNote, link, at }:
+  { role: "Bet" | "Hedge"; book: string; team: string; odds: string; stake: number; tag?: string; oddsNote?: string; link?: string | null; at?: { text: string; stale: boolean } | null }) {
   return (
     <div className={`gleg ${role === "Bet" ? "gleg-bet" : ""}`}>
       <div className="gleg-top">
@@ -59,12 +69,17 @@ function Leg({ role, book, team, odds, stake, tag, oddsNote, link }:
           <div className="gleg-stake num">{usd(stake)}</div>
         </div>
       </div>
-      {link && <a className="gleg-open" href={link} target="_blank" rel="noopener noreferrer">Open {book} ↗</a>}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+        {link ? <a className="gleg-open" href={link} target="_blank" rel="noopener noreferrer">Open {book} ↗</a> : <span />}
+        {at && <span className="gleg-age" style={{ fontSize: 11, color: at.stale ? "var(--warn)" : "var(--muted)" }}>{book} {at.text}</span>}
+      </div>
     </div>
   );
 }
 
-export default function GameCard({ game, fixedBookName, rank, fixedStake, hedgeStake, fixedTag, fixedOddsNote, metric, outcomes, details, ticket }: Props) {
+export default function GameCard({ game, fixedBookName, rank, fixedStake, hedgeStake, fixedTag, fixedOddsNote, metric, outcomes, details, ticket, recheck }: Props) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const i = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(i); }, []);
   const t = when(game.commence);
   const worst = outcomes.length ? Math.min(...outcomes.map(o => o.value)) : 0;
   const allSame = outcomes.length > 1 && outcomes.every(o => Math.abs(o.value - outcomes[0].value) < 0.01);
@@ -91,8 +106,8 @@ export default function GameCard({ game, fixedBookName, rank, fixedStake, hedgeS
       </div>
 
       <div className="game-legs">
-        <Leg role="Bet" book={fixedBookName} team={game.fixedTeam} odds={game.fixedAmerican} stake={fixedStake} tag={fixedTag} oddsNote={fixedOddsNote} link={game.fixedLink} />
-        <Leg role="Hedge" book={game.hedgeBookName} team={game.hedgeTeam} odds={game.hedgeAmerican} stake={hedgeStake} link={game.hedgeLink} />
+        <Leg role="Bet" book={fixedBookName} team={game.fixedTeam} odds={game.fixedAmerican} stake={fixedStake} tag={fixedTag} oddsNote={fixedOddsNote} link={game.fixedLink} at={age(game.fixedAt, now)} />
+        <Leg role="Hedge" book={game.hedgeBookName} team={game.hedgeTeam} odds={game.hedgeAmerican} stake={hedgeStake} link={game.hedgeLink} at={age(game.hedgeAt, now)} />
       </div>
 
       <div className="game-foot">
@@ -115,7 +130,7 @@ export default function GameCard({ game, fixedBookName, rank, fixedStake, hedgeS
             </div>
           ))}
         </div>
-        {ticket && <div className="game-send"><SendTicket game={game} fixedBookName={fixedBookName} ticket={ticket} /></div>}
+        {ticket && <div className="game-send"><SendTicket game={game} fixedBookName={fixedBookName} ticket={ticket} recheck={recheck} /></div>}
       </div>
     </div>
   );

@@ -37,6 +37,7 @@ export default function ProfitBoostFinder({ initial, initialName }: { initial?: 
       loading={finder.loading}
       error={finder.error}
       updated={finder.updated}
+      updatedAt={finder.updatedAt}
       callsLeft={finder.callsLeft}
       cached={finder.cached}
       onFetch={() => finder.fetchGames(config)}
@@ -79,6 +80,7 @@ export default function ProfitBoostFinder({ initial, initialName }: { initial?: 
         return (
           <GameCard
             key={g.key}
+            recheck={() => finder.recheck(g.key)}
             game={g}
             rank={rank}
             fixedBookName={config.fixedBook}

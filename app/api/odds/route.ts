@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       : `https://api.the-odds-api.com/v4/sports/${sport}/odds/?${common}&markets=${markets.join(",")}`;
 
   const cacheKey = `am|${sport}|${bookmakers || ""}|${list ? "list" : markets.join(",")}|${event || ""}`;
-  const cached = cache.get(cacheKey);
+  const cached = searchParams.get("fresh") ? undefined : cache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < TTL_MS) {
     return NextResponse.json({ data: cached.data, remaining: cached.remaining, cached: true });
   }

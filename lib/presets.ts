@@ -33,35 +33,35 @@ const cfg = (fixedBook: string, min: string, max: string, hedgeBooks = hedgesFor
 /** Starter presets modelled on the promos that show up most in the tracker. */
 export const BUILT_IN: Preset[] = [
   // Low hold / min loss
-  { id: "b-lh-fd", tool: "lowhold", name: "FanDuel min loss", config: cfg("FanDuel", "-200", "+200"), inputs: { cash: "500" }, builtIn: true },
-  { id: "b-lh-dk", tool: "lowhold", name: "DraftKings min loss", config: cfg("DraftKings", "-200", "+200"), inputs: { cash: "500" }, builtIn: true },
-  { id: "b-lh-mgm", tool: "lowhold", name: "BetMGM $1.5k", config: cfg("BetMGM", "-200", "+200"), inputs: { cash: "1500" }, builtIn: true },
-  { id: "b-lh-tsb", tool: "lowhold", name: "theScore Bet $1k", config: cfg("theScore Bet", "-200", "+200"), inputs: { cash: "1000" }, builtIn: true },
-  { id: "b-lh-czr", tool: "lowhold", name: "Caesars $1k", config: cfg("Caesars", "-200", "+200"), inputs: { cash: "1000" }, builtIn: true },
+  { id: "b-lh-fd", tool: "lowhold", name: "FanDuel min loss", config: cfg("FanDuel", "", ""), inputs: { cash: "500" }, builtIn: true },
+  { id: "b-lh-dk", tool: "lowhold", name: "DraftKings min loss", config: cfg("DraftKings", "", ""), inputs: { cash: "500" }, builtIn: true },
+  { id: "b-lh-mgm", tool: "lowhold", name: "BetMGM $1.5k", config: cfg("BetMGM", "", ""), inputs: { cash: "1500" }, builtIn: true },
+  { id: "b-lh-tsb", tool: "lowhold", name: "theScore Bet $1k", config: cfg("theScore Bet", "", ""), inputs: { cash: "1000" }, builtIn: true },
+  { id: "b-lh-czr", tool: "lowhold", name: "Caesars $1k", config: cfg("Caesars", "", ""), inputs: { cash: "1000" }, builtIn: true },
 
   // Free bet
-  { id: "b-fb-fd500", tool: "freebet", name: "FanDuel $500 free bet", config: cfg("FanDuel", "+200", "+800"), inputs: { amount: "500" }, builtIn: true },
-  { id: "b-fb-fd1k", tool: "freebet", name: "FanDuel $1k free bet", config: cfg("FanDuel", "+200", "+800"), inputs: { amount: "1000" }, builtIn: true },
-  { id: "b-fb-dk500", tool: "freebet", name: "DraftKings $500 free bet", config: cfg("DraftKings", "+200", "+800"), inputs: { amount: "500" }, builtIn: true },
-  { id: "b-fb-dk1k", tool: "freebet", name: "DraftKings $1k free bet", config: cfg("DraftKings", "+200", "+800"), inputs: { amount: "1000" }, builtIn: true },
+  { id: "b-fb-fd500", tool: "freebet", name: "FanDuel $500 free bet", config: cfg("FanDuel", "", ""), inputs: { amount: "500" }, builtIn: true },
+  { id: "b-fb-fd1k", tool: "freebet", name: "FanDuel $1k free bet", config: cfg("FanDuel", "", ""), inputs: { amount: "1000" }, builtIn: true },
+  { id: "b-fb-dk500", tool: "freebet", name: "DraftKings $500 free bet", config: cfg("DraftKings", "", ""), inputs: { amount: "500" }, builtIn: true },
+  { id: "b-fb-dk1k", tool: "freebet", name: "DraftKings $1k free bet", config: cfg("DraftKings", "", ""), inputs: { amount: "1000" }, builtIn: true },
 
   // Risk free
-  { id: "b-rf-fd500", tool: "riskfree", name: "FanDuel $500 risk free", config: cfg("FanDuel", "+200", "+1000"), inputs: { amount: "500", conv: 65 }, builtIn: true },
-  { id: "b-rf-fd1k", tool: "riskfree", name: "FanDuel $1k risk free", config: cfg("FanDuel", "+200", "+1000"), inputs: { amount: "1000", conv: 65 }, builtIn: true },
-  { id: "b-rf-tsb1k", tool: "riskfree", name: "theScore Bet $1k risk free", config: cfg("theScore Bet", "+200", "+1000"), inputs: { amount: "1000", conv: 65 }, builtIn: true },
-  { id: "b-rf-mgm", tool: "riskfree", name: "BetMGM $1.5k risk free", config: cfg("BetMGM", "+200", "+1000"), inputs: { amount: "1500", conv: 65 }, builtIn: true },
-  { id: "b-rf-br500", tool: "riskfree", name: "BetRivers $500 risk free", config: cfg("BetRivers", "+200", "+1000"), inputs: { amount: "500", conv: 65 }, builtIn: true },
+  { id: "b-rf-fd500", tool: "riskfree", name: "FanDuel $500 risk free", config: cfg("FanDuel", "", ""), inputs: { amount: "500", conv: 65 }, builtIn: true },
+  { id: "b-rf-fd1k", tool: "riskfree", name: "FanDuel $1k risk free", config: cfg("FanDuel", "", ""), inputs: { amount: "1000", conv: 65 }, builtIn: true },
+  { id: "b-rf-tsb1k", tool: "riskfree", name: "theScore Bet $1k risk free", config: cfg("theScore Bet", "", ""), inputs: { amount: "1000", conv: 65 }, builtIn: true },
+  { id: "b-rf-mgm", tool: "riskfree", name: "BetMGM $1.5k risk free", config: cfg("BetMGM", "", ""), inputs: { amount: "1500", conv: 65 }, builtIn: true },
+  { id: "b-rf-br500", tool: "riskfree", name: "BetRivers $500 risk free", config: cfg("BetRivers", "", ""), inputs: { amount: "500", conv: 65 }, builtIn: true },
 
   // Site credit (stake comes back when it wins: a deposit match or site credit bet like cash)
-  { id: "b-sc-fd500", tool: "credit", name: "FanDuel $500 deposit match", config: cfg("FanDuel", "-200", "+200"), inputs: { amount: "500" }, builtIn: true },
-  { id: "b-sc-tsb250", tool: "credit", name: "theScore Bet $250 site credit", config: cfg("theScore Bet", "-200", "+200"), inputs: { amount: "250" }, builtIn: true },
-  { id: "b-sc-br250", tool: "credit", name: "BetRivers $250 site credit", config: cfg("BetRivers", "-200", "+200"), inputs: { amount: "250" }, builtIn: true },
-  { id: "b-sc-dk", tool: "credit", name: "DraftKings site credit", config: cfg("DraftKings", "-200", "+200"), inputs: { amount: "250" }, builtIn: true },
+  { id: "b-sc-fd500", tool: "credit", name: "FanDuel $500 deposit match", config: cfg("FanDuel", "", ""), inputs: { amount: "500" }, builtIn: true },
+  { id: "b-sc-tsb250", tool: "credit", name: "theScore Bet $250 site credit", config: cfg("theScore Bet", "", ""), inputs: { amount: "250" }, builtIn: true },
+  { id: "b-sc-br250", tool: "credit", name: "BetRivers $250 site credit", config: cfg("BetRivers", "", ""), inputs: { amount: "250" }, builtIn: true },
+  { id: "b-sc-dk", tool: "credit", name: "DraftKings site credit", config: cfg("DraftKings", "", ""), inputs: { amount: "250" }, builtIn: true },
 
   // Profit boost
-  { id: "b-pb-fd25", tool: "boost", name: "FanDuel 25% boost", config: cfg("FanDuel", "-200", "+300"), inputs: { stake: "100", boost: "25", cap: "50" }, builtIn: true },
-  { id: "b-pb-fd50", tool: "boost", name: "FanDuel 50% boost", config: cfg("FanDuel", "-200", "+300"), inputs: { stake: "100", boost: "50", cap: "100" }, builtIn: true },
-  { id: "b-pb-dk50", tool: "boost", name: "DraftKings 50% boost", config: cfg("DraftKings", "-200", "+300"), inputs: { stake: "100", boost: "50", cap: "100" }, builtIn: true },
+  { id: "b-pb-fd25", tool: "boost", name: "FanDuel 25% boost", config: cfg("FanDuel", "", ""), inputs: { stake: "100", boost: "25", cap: "50" }, builtIn: true },
+  { id: "b-pb-fd50", tool: "boost", name: "FanDuel 50% boost", config: cfg("FanDuel", "", ""), inputs: { stake: "100", boost: "50", cap: "100" }, builtIn: true },
+  { id: "b-pb-dk50", tool: "boost", name: "DraftKings 50% boost", config: cfg("DraftKings", "", ""), inputs: { stake: "100", boost: "50", cap: "100" }, builtIn: true },
 ];
 
 export const defaultPreset = (tool: ToolKey): Preset => BUILT_IN.find(p => p.tool === tool)!;

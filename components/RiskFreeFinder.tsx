@@ -35,6 +35,7 @@ export default function RiskFreeFinder({ initial, initialName }: { initial?: Pre
       loading={finder.loading}
       error={finder.error}
       updated={finder.updated}
+      updatedAt={finder.updatedAt}
       callsLeft={finder.callsLeft}
       cached={finder.cached}
       onFetch={() => finder.fetchGames(config)}
@@ -71,6 +72,7 @@ export default function RiskFreeFinder({ initial, initialName }: { initial?: Pre
         return (
           <GameCard
             key={g.key}
+            recheck={() => finder.recheck(g.key)}
             game={g}
             rank={rank}
             fixedBookName={config.fixedBook}

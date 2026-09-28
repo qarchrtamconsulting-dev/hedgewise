@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FinderGame } from "./useGameFinder";
+import { FinderGame, Recheck } from "./useGameFinder";
 import { LEAGUE_SPORT, fmt } from "@/lib/constants";
 import { copyText } from "@/lib/clipboard";
 import { Leg, Play, getDb, localIso, today } from "@/lib/db";
@@ -77,8 +77,18 @@ type Mode = null | "log" | "send";
  *  - Log to client: saves the play to the client (then check the numbers and confirm).
  *  - Send to client: opens Messages with the text filled in. Saves nothing.
  */
-export default function SendTicket({ game, fixedBookName, ticket }: { game: FinderGame; fixedBookName: string; ticket: Ticket }) {
+export default function SendTicket({ game, fixedBookName, ticket, recheck }: { game: FinderGame; fixedBookName: string; ticket: Ticket; recheck?: () => Promise<Recheck> }) {
   const [mode, setMode] = useState<Mode>(null);
+  const [check, setCheck] = useState<{ busy: boolean; r?: Recheck } | null>(null);
+  const runCheck = async () => {
+    if (!recheck) return;
+    setCheck({ busy: true });
+    const r = await recheck();
+    setCheck({ busy: false, r });
+  };
+  // Opening Send or Log re-prices the game first (lines move between the search and the text).
+  useEffect(() => { if (mode) void runCheck(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [mode]);
+  const checking = !!check?.busy;
   const [clients, setClients] = useState<ClientRow[] | null>(null);
   const [clientId, setClientId] = useState("");
   const [selfHedge, setSelfHedge] = useState(false);
@@ -239,13 +249,13 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
         {mode === "send" && (
           <>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              {client ? (
+              {client && !checking ? (
                 <a className="btn-primary" style={{ width: "auto", padding: "8px 16px", display: "inline-block" }}
                    href={smsHref(client.phone, body)} onClick={() => { setTexted(client.id); setStatus(null); }}>
                   Text {firstName}
                 </a>
               ) : (
-                <button className="btn-primary" style={{ width: "auto", padding: "8px 16px" }} disabled>Pick a client</button>
+                <button className="btn-primary" style={{ width: "auto", padding: "8px 16px" }} disabled>{checking ? "Checking the line…" : "Pick a client"}</button>
               )}
               <button className="btn-ghost" onClick={() => setShowText(v => !v)}>{showText ? "Hide text" : "See / edit text"}</button>
               <button className="btn-ghost" onClick={copy}>Copy text</button>
@@ -271,13 +281,20 @@ export default function SendTicket({ game, fixedBookName, ticket }: { game: Find
         {mode === "log" && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
             <button className="btn-primary" style={{ width: "auto", padding: "8px 16px" }} onClick={logBet}
-              disabled={!client || busy || (!!saved && saved.play.client_id === client?.id)}>
-              {!client ? "Pick a client" : busy ? "Saving…" : `Log bet for ${firstName}`}
+              disabled={!client || busy || checking || (!!saved && saved.play.client_id === client?.id)}>
+              {checking ? "Checking the line…" : !client ? "Pick a client" : busy ? "Saving…" : `Log bet for ${firstName}`}
             </button>
             <span className="task-sub">Check the numbers below, then confirm.</span>
           </div>
         )}
 
+        {recheck && check && !check.busy && check.r && (
+          <div className="hint" role="status" style={{ marginTop: 0, display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap",
+            color: check.r.status === "same" ? "var(--text-2)" : check.r.status === "moved" ? "var(--warn)" : "var(--neg)" }}>
+            <span>{check.r.note}</span>
+            <button className="link" onClick={runCheck} style={{ background: "none", border: 0, padding: 0, color: "var(--accent)", cursor: "pointer", font: "inherit" }}>Recheck</button>
+          </div>
+        )}
         {status && <span style={{ color: "var(--text-2)", fontSize: 12 }}>{status}</span>}
         {saved && client && saved.play.client_id === client.id && (
           <Receipt key={saved.play.id} play={saved.play} legs={saved.legs} clientName={client.name}
