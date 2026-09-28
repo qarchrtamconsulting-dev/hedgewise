@@ -27,6 +27,8 @@ export interface FinderConfig {
   fixedMinAmerican: string;
   fixedMaxAmerican: string;
   hideLive: boolean;
+  /** Only games starting today (Eastern). Missing = on, so older saved presets get it too. */
+  todayOnly?: boolean;
 }
 
 // Filters games where the FIXED book has odds in your range
@@ -53,6 +55,9 @@ export function useGameFinder() {
     const minD = toDec(cfg.fixedMinAmerican);
     const maxD = toDec(cfg.fixedMaxAmerican);
     const now = new Date();
+    const etDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+    const today = etDay(now);
+    const todayOnly = cfg.todayOnly !== false;
     let raw: any[] = [];
     let anyCached = false;
 
@@ -71,6 +76,7 @@ export function useGameFinder() {
 
     const results: FinderGame[] = raw.map((game: any) => {
       if (cfg.hideLive && new Date(game.commence_time) <= now) return null;
+      if (todayOnly && etDay(new Date(game.commence_time)) !== today) return null;
 
       // build per-team -> per-book price + link map
       type Side = { price: number; link?: string };

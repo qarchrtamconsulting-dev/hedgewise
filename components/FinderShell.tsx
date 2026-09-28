@@ -141,7 +141,8 @@ export default function FinderShell({
             <span className="label">Max odds</span>
             <input className="input num" value={config.fixedMaxAmerican} onChange={e => set({ fixedMaxAmerican: e.target.value })} />
           </div>
-          <div style={{ gridColumn: "1 / -1", paddingTop: 4 }}>
+          <div style={{ gridColumn: "1 / -1", paddingTop: 4, display: "flex", flexDirection: "column", gap: 8 }}>
+            <Toggle on={config.todayOnly !== false} set={(v) => set({ todayOnly: v })} label="Today's games only" />
             <Toggle on={config.hideLive} set={(v) => set({ hideLive: v })} label="Hide live games" />
           </div>
         </div>
