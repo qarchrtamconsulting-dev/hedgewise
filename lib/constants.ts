@@ -27,3 +27,6 @@ export const toAm = (d: number) => d >= 2 ? `+${Math.round((d-1)*100)}` : `-${Ma
 export const fmt = (n: number) => `$${Math.abs(n).toFixed(2)}`;
 export const mkHold = (d1: number, d2: number) => ((1/d1)+(1/d2)-1)*100;
 export const holdColor = (h: number) => h < 1.5 ? "var(--pos)" : h < 3.5 ? "var(--warn)" : "var(--neg)";
+
+/** Bet slips go out in whole $5 amounts: round to the nearest $5 (never below $0). */
+export const round5 = (n: number) => Math.max(0, Math.round((Number(n) || 0) / 5) * 5);

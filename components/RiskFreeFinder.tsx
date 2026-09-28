@@ -6,7 +6,7 @@ import { useGameFinder, FinderConfig } from "./useGameFinder";
 import { USDInput, Slider } from "./ui";
 import PresetBar from "./PresetBar";
 import { PresetState, defaultPreset } from "@/lib/presets";
-import { fmt } from "@/lib/constants";
+import { fmt, round5 } from "@/lib/constants";
 
 export default function RiskFreeFinder({ initial, initialName }: { initial?: PresetState; initialName?: string }) {
   const start = initial || defaultPreset("riskfree");
@@ -64,7 +64,7 @@ export default function RiskFreeFinder({ initial, initialName }: { initial?: Pre
         // lose: refundValue - amt + hedgeStake*(hd-1) = X  (we lose the $amt, but get refundValue back as bonus)
         // → winProfit - hedgeStake = refundValue - amt + hedgeStake*(hd-1)
         // → hedgeStake * hd = winProfit - refundValue + amt
-        const hedgeStake = (winProfit - refundValue + amt) / g.hedgeDecimal;
+        const hedgeStake = round5((winProfit - refundValue + amt) / g.hedgeDecimal);   // slips go out in $5 amounts
         const winNet = winProfit - hedgeStake;
         const lossNet = refundValue - amt + hedgeStake * (g.hedgeDecimal - 1);
 

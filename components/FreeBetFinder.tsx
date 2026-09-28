@@ -6,7 +6,7 @@ import { useGameFinder, FinderConfig } from "./useGameFinder";
 import { USDInput } from "./ui";
 import PresetBar from "./PresetBar";
 import { PresetState, defaultPreset } from "@/lib/presets";
-import { fmt } from "@/lib/constants";
+import { fmt, round5 } from "@/lib/constants";
 
 export default function FreeBetFinder({ initial, initialName }: { initial?: PresetState; initialName?: string }) {
   const start = initial || defaultPreset("freebet");
@@ -48,8 +48,10 @@ export default function FreeBetFinder({ initial, initialName }: { initial?: Pres
       renderGame={(g, rank) => {
         // Free bet math: profit if FB wins = fb * (decimal - 1). Hedge = profit / hedge_decimal.
         const fbProfit = fb * (g.fixedDecimal - 1);
-        const hedgeStake = fbProfit / g.hedgeDecimal;
-        const guaranteed = fbProfit - hedgeStake;
+        const hedgeStake = round5(fbProfit / g.hedgeDecimal);   // slips go out in $5 amounts
+        const fbWins = fbProfit - hedgeStake;
+        const hedgeWins = hedgeStake * (g.hedgeDecimal - 1);
+        const guaranteed = Math.min(fbWins, hedgeWins);
         const conversion = fb > 0 ? (guaranteed / fb) * 100 : 0;
 
         return (
@@ -63,8 +65,8 @@ export default function FreeBetFinder({ initial, initialName }: { initial?: Pres
             fixedTag="Free bet"
             metric={{ label: "Conversion", value: `${conversion.toFixed(1)}%`, tone: conversion >= 65 ? "pos" : conversion >= 55 ? "warn" : "neg" }}
             outcomes={[
-              { label: `${g.fixedTeam} ${g.family === "ml" ? "win" : "hits"}`, value: guaranteed },
-              { label: `${g.hedgeTeam} ${g.family === "ml" ? "win" : "hits"}`, value: guaranteed },
+              { label: `${g.fixedTeam} ${g.family === "ml" ? "win" : "hits"}`, value: fbWins },
+              { label: `${g.hedgeTeam} ${g.family === "ml" ? "win" : "hits"}`, value: hedgeWins },
             ]}
             details={[{ label: "Hold", value: `${g.hold.toFixed(2)}%` }]}
             ticket={{ type: "Free Bet", amount: fb || 0, fixedStake: fb || 0, hedgeStake, expected: guaranteed, fixedNote: "use your free bet", fixedIsCredit: true, fixedPayout: fbProfit, hedgePayout: hedgeStake * g.hedgeDecimal }}

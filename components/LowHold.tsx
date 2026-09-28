@@ -6,7 +6,7 @@ import { useGameFinder, FinderConfig } from "./useGameFinder";
 import { USDInput } from "./ui";
 import PresetBar from "./PresetBar";
 import { PresetState, defaultPreset } from "@/lib/presets";
-import { fmt, holdColor } from "@/lib/constants";
+import { fmt, holdColor, round5 } from "@/lib/constants";
 
 export default function LowHoldFinder({ initial, initialName }: { initial?: PresetState; initialName?: string }) {
   const start = initial || defaultPreset("lowhold");
@@ -47,7 +47,7 @@ export default function LowHoldFinder({ initial, initialName }: { initial?: Pres
       renderGame={(g, rank) => {
         // Low hold: fixed-book stake is the input; hedge is sized so both outcomes pay the same.
         const stake = cash || 0;
-        const hedgeStake = (stake * g.fixedDecimal) / g.hedgeDecimal;
+        const hedgeStake = round5((stake * g.fixedDecimal) / g.hedgeDecimal);   // slips go out in $5 amounts
         const fixedNet = stake * (g.fixedDecimal - 1) - hedgeStake;
         const hedgeNet = hedgeStake * (g.hedgeDecimal - 1) - stake;
         const totalWagered = stake + hedgeStake;

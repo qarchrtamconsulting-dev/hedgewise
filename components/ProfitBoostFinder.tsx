@@ -5,7 +5,7 @@ import GameCard from "./GameCard";
 import { useGameFinder, FinderConfig } from "./useGameFinder";
 import PresetBar from "./PresetBar";
 import { PresetState, defaultPreset } from "@/lib/presets";
-import { fmt, toAm } from "@/lib/constants";
+import { fmt, toAm, round5 } from "@/lib/constants";
 
 export default function ProfitBoostFinder({ initial, initialName }: { initial?: PresetState; initialName?: string }) {
   const start = initial || defaultPreset("boost");
@@ -71,8 +71,10 @@ export default function ProfitBoostFinder({ initial, initialName }: { initial?: 
         const boostedExtra = Math.min(baseProfit * b, cap);
         const boostedPayout = s + baseProfit + boostedExtra;
         const boostedDecimal = boostedPayout / s;
-        const hedgeStake = boostedPayout / g.hedgeDecimal;
-        const guaranteed = boostedPayout - hedgeStake - s;
+        const hedgeStake = round5(boostedPayout / g.hedgeDecimal);   // slips go out in $5 amounts
+        const boostWins = boostedPayout - hedgeStake - s;
+        const hedgeWins = hedgeStake * (g.hedgeDecimal - 1) - s;
+        const guaranteed = Math.min(boostWins, hedgeWins);
 
         return (
           <GameCard
@@ -86,8 +88,8 @@ export default function ProfitBoostFinder({ initial, initialName }: { initial?: 
             fixedOddsNote={`Boosted to ${toAm(boostedDecimal)}`}
             metric={{ label: "Locked profit", value: `${guaranteed >= 0 ? "+" : "−"}$${Math.abs(guaranteed).toFixed(2)}`, tone: guaranteed >= 0 ? "pos" : "neg" }}
             outcomes={[
-              { label: `${g.fixedTeam} ${g.family === "ml" ? "win" : "hits"}`, value: guaranteed },
-              { label: `${g.hedgeTeam} ${g.family === "ml" ? "win" : "hits"}`, value: guaranteed },
+              { label: `${g.fixedTeam} ${g.family === "ml" ? "win" : "hits"}`, value: boostWins },
+              { label: `${g.hedgeTeam} ${g.family === "ml" ? "win" : "hits"}`, value: hedgeWins },
             ]}
             details={[{ label: "Hold", value: `${g.hold.toFixed(2)}%` }]}
             ticket={{ type: "Profit Boost", amount: s || 0, fixedStake: s || 0, hedgeStake, expected: guaranteed, fixedNote: "apply your profit boost", fixedPayout: boostedPayout, hedgePayout: hedgeStake * g.hedgeDecimal }}
