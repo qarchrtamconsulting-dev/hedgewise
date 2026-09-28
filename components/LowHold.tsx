@@ -54,7 +54,7 @@ export default function LowHoldFinder({ initial, initialName }: { initial?: Pres
 
         return (
           <GameCard
-            key={g.id}
+            key={g.key}
             game={g}
             rank={rank}
             fixedBookName={config.fixedBook}
@@ -62,8 +62,8 @@ export default function LowHoldFinder({ initial, initialName }: { initial?: Pres
             hedgeStake={hedgeStake}
             metric={{ label: "Hold", value: `${g.hold.toFixed(2)}%`, color: holdColor(g.hold) }}
             outcomes={[
-              { label: `${g.fixedTeam} win`, value: fixedNet },
-              { label: `${g.hedgeTeam} win`, value: hedgeNet },
+              { label: `${g.fixedTeam} ${g.family === "ml" ? "win" : "hits"}`, value: fixedNet },
+              { label: `${g.hedgeTeam} ${g.family === "ml" ? "win" : "hits"}`, value: hedgeNet },
             ]}
             details={[{ label: "Total wagered", value: fmt(totalWagered) }]}
             ticket={{ type: "Low Hold", amount: stake, fixedStake: stake, hedgeStake, expected: Math.min(fixedNet, hedgeNet), fixedPayout: stake * g.fixedDecimal, hedgePayout: hedgeStake * g.hedgeDecimal }}

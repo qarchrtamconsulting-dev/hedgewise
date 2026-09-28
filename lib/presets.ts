@@ -22,7 +22,7 @@ const LEAGUES = ["NBA", "MLB", "NHL", "NFL"];
 
 const cfg = (fixedBook: string, min: string, max: string, hedgeBooks = fixedBook === "DraftKings" ? HEDGE_FD : HEDGE): FinderConfig => ({
   fixedBook, leagues: LEAGUES, hedgeBooks: hedgeBooks.filter(b => b !== fixedBook),
-  fixedMinAmerican: min, fixedMaxAmerican: max, hideLive: true, todayOnly: true,
+  fixedMinAmerican: min, fixedMaxAmerican: max, hideLive: true, todayOnly: true, markets: ["Moneyline"],
 });
 
 /** Starter presets modelled on the promos that show up most in the tracker. */

@@ -54,7 +54,7 @@ export default function FreeBetFinder({ initial, initialName }: { initial?: Pres
 
         return (
           <GameCard
-            key={g.id}
+            key={g.key}
             game={g}
             rank={rank}
             fixedBookName={config.fixedBook}
@@ -63,8 +63,8 @@ export default function FreeBetFinder({ initial, initialName }: { initial?: Pres
             fixedTag="Free bet"
             metric={{ label: "Conversion", value: `${conversion.toFixed(1)}%`, tone: conversion >= 65 ? "pos" : conversion >= 55 ? "warn" : "neg" }}
             outcomes={[
-              { label: `${g.fixedTeam} win`, value: guaranteed },
-              { label: `${g.hedgeTeam} win`, value: guaranteed },
+              { label: `${g.fixedTeam} ${g.family === "ml" ? "win" : "hits"}`, value: guaranteed },
+              { label: `${g.hedgeTeam} ${g.family === "ml" ? "win" : "hits"}`, value: guaranteed },
             ]}
             details={[{ label: "Hold", value: `${g.hold.toFixed(2)}%` }]}
             ticket={{ type: "Free Bet", amount: fb || 0, fixedStake: fb || 0, hedgeStake, expected: guaranteed, fixedNote: "use your free bet", fixedIsCredit: true, fixedPayout: fbProfit, hedgePayout: hedgeStake * g.hedgeDecimal }}

@@ -2,7 +2,7 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { CheckList, Toggle } from "./ui";
 import { ODDS_BOOKS as BOOKS, LEAGUES } from "@/lib/constants";
-import { FinderConfig, FinderGame } from "./useGameFinder";
+import { FinderConfig, FinderGame, MARKETS, marketsOf } from "./useGameFinder";
 
 interface Props {
   title: string;
@@ -31,7 +31,16 @@ export default function FinderShell({
   title, presetBar, config, setConfig, games: rawGames, loading, error, updated, callsLeft, cached, onFetch, inputs, renderGame, score,
 }: Props) {
   const set = (patch: Partial<FinderConfig>) => setConfig({ ...config, ...patch });
-  const games = score ? [...rawGames].sort((a, b) => score(a) - score(b)) : rawGames;
+  const sorted = score ? [...rawGames].sort((a, b) => score(a) - score(b)) : rawGames;
+  // Alternate lines can give one game dozens of pairings: keep the best 2 spreads/totals and the best moneyline per game.
+  const perGame = new Map<string, number>();
+  const games = sorted.filter(g => {
+    const k = `${g.id}|${g.family}`;
+    const n = (perGame.get(k) || 0) + 1;
+    perGame.set(k, n);
+    return n <= (g.family === "ml" ? 1 : 2);
+  });
+  const mkts = marketsOf(config);
 
   // After a search, fold the settings away and show only the games.
   // Back (button, browser back, or phone swipe) brings the settings back.
@@ -79,7 +88,8 @@ export default function FinderShell({
   );
 
   if (showResults) {
-    const summary = [config.fixedBook, config.leagues.join(", "), `${config.fixedMinAmerican} to ${config.fixedMaxAmerican}`].filter(Boolean).join(" · ");
+    const range = config.fixedMinAmerican || config.fixedMaxAmerican ? `${config.fixedMinAmerican || "any"} to ${config.fixedMaxAmerican || "any"}` : "";
+    const summary = [config.fixedBook, config.leagues.join(", "), mkts.join(", "), range].filter(Boolean).join(" · ");
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 1040, margin: "0 auto", width: "100%" }}>
         <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", position: "sticky", top: 60, zIndex: 5, padding: "10px 14px" }}>
@@ -130,6 +140,10 @@ export default function FinderShell({
         </div>
 
         <CheckList label="Leagues" options={LEAGUES} value={config.leagues} onChange={(v) => set({ leagues: v })} req />
+        <CheckList label="Markets" options={MARKETS} value={mkts} onChange={(v) => set({ markets: v })} req />
+        {mkts.some(m => m.startsWith("Alt")) && (
+          <div className="hint" style={{ marginTop: -4 }}>Alt lines are pulled game by game: about 1 API credit per game per alt market.</div>
+        )}
         <CheckList label="Hedge books" options={BOOKS.filter(b => b !== config.fixedBook)} value={config.hedgeBooks} onChange={(v) => set({ hedgeBooks: v })} req />
 
         <div className="card" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>

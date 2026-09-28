@@ -70,7 +70,7 @@ export default function RiskFreeFinder({ initial, initialName }: { initial?: Pre
 
         return (
           <GameCard
-            key={g.id}
+            key={g.key}
             game={g}
             rank={rank}
             fixedBookName={config.fixedBook}
@@ -79,8 +79,8 @@ export default function RiskFreeFinder({ initial, initialName }: { initial?: Pre
             fixedTag="Risk-free"
             metric={{ label: "Locked in", value: `${Math.min(winNet, lossNet) >= 0 ? "+" : "−"}$${Math.abs(Math.min(winNet, lossNet)).toFixed(2)}`, tone: Math.min(winNet, lossNet) >= 0 ? "pos" : "neg" }}
             outcomes={[
-              { label: `${g.fixedTeam} win`, value: winNet },
-              { label: `${g.hedgeTeam} win (refund)`, value: lossNet },
+              { label: `${g.fixedTeam} ${g.family === "ml" ? "win" : "hits"}`, value: winNet },
+              { label: `${g.hedgeTeam} ${g.family === "ml" ? "win" : "hits"} (refund)`, value: lossNet },
             ]}
             details={[{ label: "Refund valued at", value: `${refundConv}%` }]}
             ticket={{ type: "Risk Free", amount: amt || 0, fixedStake: amt || 0, hedgeStake: Math.max(0, hedgeStake), expected: Math.min(winNet, lossNet), fixedNote: "risk-free bet", fixedPayout: (amt || 0) * g.fixedDecimal, hedgePayout: Math.max(0, hedgeStake) * g.hedgeDecimal }}

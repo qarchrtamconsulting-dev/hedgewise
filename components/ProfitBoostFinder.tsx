@@ -76,7 +76,7 @@ export default function ProfitBoostFinder({ initial, initialName }: { initial?: 
 
         return (
           <GameCard
-            key={g.id}
+            key={g.key}
             game={g}
             rank={rank}
             fixedBookName={config.fixedBook}
@@ -86,8 +86,8 @@ export default function ProfitBoostFinder({ initial, initialName }: { initial?: 
             fixedOddsNote={`Boosted to ${toAm(boostedDecimal)}`}
             metric={{ label: "Locked profit", value: `${guaranteed >= 0 ? "+" : "−"}$${Math.abs(guaranteed).toFixed(2)}`, tone: guaranteed >= 0 ? "pos" : "neg" }}
             outcomes={[
-              { label: `${g.fixedTeam} win`, value: guaranteed },
-              { label: `${g.hedgeTeam} win`, value: guaranteed },
+              { label: `${g.fixedTeam} ${g.family === "ml" ? "win" : "hits"}`, value: guaranteed },
+              { label: `${g.hedgeTeam} ${g.family === "ml" ? "win" : "hits"}`, value: guaranteed },
             ]}
             details={[{ label: "Hold", value: `${g.hold.toFixed(2)}%` }]}
             ticket={{ type: "Profit Boost", amount: s || 0, fixedStake: s || 0, hedgeStake, expected: guaranteed, fixedNote: "apply your profit boost", fixedPayout: boostedPayout, hedgePayout: hedgeStake * g.hedgeDecimal }}

@@ -79,6 +79,7 @@ export default function GameCard({ game, fixedBookName, rank, fixedStake, hedgeS
           </div>
           <div className="game-meta">
             {game.league && <span className="game-chip">{game.league}</span>}
+            {game.market && <span className="game-chip">{game.market}</span>}
             <span>{t.text}</span>
             {t.rel && <span className={t.soon || t.rel === "live" ? "game-soon" : ""}>· {t.rel}</span>}
           </div>
