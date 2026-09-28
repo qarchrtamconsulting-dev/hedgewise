@@ -109,7 +109,7 @@ export const MOVE_SIGN: Record<MoveType, 1 | -1> = {
   received_from_client: -1, self_hedge_return: -1,
 };
 
-export const PLAY_TYPES = ["Free Bet", "Risk Free", "Profit Boost", "Low Hold", "Bet Match", "Deposit Match", "Casino", "Bonus", "Other"];
+export const PLAY_TYPES = ["Free Bet", "Risk Free", "Profit Boost", "Low Hold", "Bet Match", "Deposit Match", "Site Credit", "Casino", "Bonus", "Other"];
 
 // ─── Money formatting ──────────────────────────────────────────
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -3,16 +3,16 @@ import { useEffect, useState } from "react";
 import LowHoldFinder from "@/components/LowHold";
 import FreeBetFinder from "@/components/FreeBetFinder";
 import RiskFreeFinder from "@/components/RiskFreeFinder";
+import SiteCreditFinder from "@/components/SiteCreditFinder";
 import ProfitBoostFinder from "@/components/ProfitBoostFinder";
-import { PresetState, ToolKey, defaultPreset, readShareParams } from "@/lib/presets";
+import { PresetState, ToolKey, defaultPreset, hedgesFor, readShareParams } from "@/lib/presets";
 import { ODDS_BOOKS } from "@/lib/constants";
 
-const HEDGES = ["FanDuel", "DraftKings", "BetMGM", "Caesars", "Fanatics"];
 
 /** A tool's standard setup, with the fixed book swapped for the one picked on the Board. */
 const forBook = (t: ToolKey, book: string): PresetState => {
   const d = defaultPreset(t);
-  return { config: { ...d.config, fixedBook: book, hedgeBooks: HEDGES.filter(b => b !== book) }, inputs: d.inputs };
+  return { config: { ...d.config, fixedBook: book, hedgeBooks: hedgesFor(book) }, inputs: d.inputs };
 };
 
 const TOOLS: readonly (readonly [ToolKey, string])[] = [
@@ -20,6 +20,7 @@ const TOOLS: readonly (readonly [ToolKey, string])[] = [
   ["freebet", "Free Bet"],
   ["riskfree", "Risk Free"],
   ["boost", "Profit Boost"],
+  ["credit", "Site Credit"],
 ];
 
 export default function ToolsPage() {
@@ -61,6 +62,7 @@ export default function ToolsPage() {
       {tool === "freebet" && <FreeBetFinder key={`fb${linkKey}`} initial={initialFor("freebet")} initialName={nameFor("freebet")} />}
       {tool === "riskfree" && <RiskFreeFinder key={`rf${linkKey}`} initial={initialFor("riskfree")} initialName={nameFor("riskfree")} />}
       {tool === "boost" && <ProfitBoostFinder key={`pb${linkKey}`} initial={initialFor("boost")} initialName={nameFor("boost")} />}
+      {tool === "credit" && <SiteCreditFinder key={`sc${linkKey}`} initial={initialFor("credit")} initialName={nameFor("credit")} />}
     </div>
   );
 }

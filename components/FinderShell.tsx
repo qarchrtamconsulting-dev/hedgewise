@@ -3,6 +3,7 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { CheckList, Toggle } from "./ui";
 import { ODDS_BOOKS as BOOKS, LEAGUES } from "@/lib/constants";
 import { FinderConfig, FinderGame, MARKETS, marketsOf } from "./useGameFinder";
+import { hedgesFor } from "@/lib/presets";
 
 interface Props {
   title: string;
@@ -132,7 +133,7 @@ export default function FinderShell({
 
         <div className="card">
           <span className="label">Fixed book</span>
-          <select className="input" value={config.fixedBook} onChange={e => set({ fixedBook: e.target.value })}>
+          <select className="input" value={config.fixedBook} onChange={e => set({ fixedBook: e.target.value, hedgeBooks: hedgesFor(e.target.value) })}>
             <option value="">Select a book</option>
             {BOOKS.map(b => <option key={b} value={b}>{b}</option>)}
           </select>

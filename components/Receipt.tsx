@@ -21,13 +21,16 @@ const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 const plain = (stake: number, dec: number | null, credit: boolean) =>
   dec ? (credit ? stake * (dec - 1) : stake * dec) : 0;
 
-function toRows(legs: Leg[]): Row[] {
+/** Site credit pays back its stake when it wins; a free bet only pays the winnings. */
+const returnsStake = (p: Play) => /site credit|deposit match/i.test(p.promo_type || "");
+
+function toRows(legs: Leg[], returned = false): Row[] {
   return [...legs]
     .sort((a, b) => a.seq - b.seq || (a.side === b.side ? Number(a.self_hedge) - Number(b.self_hedge) : a.side === "promo" ? -1 : 1))
     .map(l => {
       const credit = !(Number(l.cash_stake) > 0) && Number(l.credit_stake) > 0;
       const stake = credit ? Number(l.credit_stake) : Number(l.cash_stake);
-      const base = plain(stake, toDec(l.odds || ""), credit);
+      const base = plain(stake, toDec(l.odds || ""), credit && !returned);
       return {
         id: l.id, side: l.side, self: l.self_hedge, book: l.book || "", selection: l.selection || "", credit,
         odds: l.odds || "", stake: String(r2(stake)), payout: String(r2(Number(l.payout))),
@@ -40,7 +43,7 @@ export default function Receipt({ play, legs, clientName, sentAt, onDone }: {
   play: Play; legs: Leg[]; clientName?: string; sentAt?: string | null;
   onDone?: (result: "confirmed" | "discarded") => void;
 }) {
-  const [rows, setRows] = useState<Row[]>(() => toRows(legs));
+  const [rows, setRows] = useState<Row[]>(() => toRows(legs, returnsStake(play)));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<null | "confirmed" | "discarded">(null);
@@ -50,10 +53,10 @@ export default function Receipt({ play, legs, clientName, sentAt, onDone }: {
     if (r.id !== id) return r;
     const n = { ...r, ...patch };
     if (recompute) {
-      const base = plain(parseFloat(n.stake) || 0, toDec(n.odds), n.credit);
+      const base = plain(parseFloat(n.stake) || 0, toDec(n.odds), n.credit && !returnsStake(play));
       if (base > 0) n.payout = String(r2(base * n.mult));
     } else if (patch.payout !== undefined) {
-      const base = plain(parseFloat(n.stake) || 0, toDec(n.odds), n.credit);
+      const base = plain(parseFloat(n.stake) || 0, toDec(n.odds), n.credit && !returnsStake(play));
       if (base > 0) n.mult = (parseFloat(n.payout) || 0) / base;
     }
     return n;

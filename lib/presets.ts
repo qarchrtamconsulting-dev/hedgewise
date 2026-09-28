@@ -1,7 +1,7 @@
 import type { FinderConfig } from "@/components/useGameFinder";
 
-export type ToolKey = "lowhold" | "freebet" | "riskfree" | "boost";
-export const TOOL_KEYS: ToolKey[] = ["lowhold", "freebet", "riskfree", "boost"];
+export type ToolKey = "lowhold" | "freebet" | "riskfree" | "boost" | "credit";
+export const TOOL_KEYS: ToolKey[] = ["lowhold", "freebet", "riskfree", "boost", "credit"];
 
 /** Everything needed to reproduce a tool's setup. */
 export interface PresetState {
@@ -16,11 +16,16 @@ export interface Preset extends PresetState {
   builtIn?: boolean;
 }
 
-const HEDGE = ["DraftKings", "BetMGM", "Caesars", "Fanatics"];
-const HEDGE_FD = ["FanDuel", "BetMGM", "Caesars", "Fanatics"];
 const LEAGUES = ["NBA", "MLB", "NHL", "NFL"];
 
-const cfg = (fixedBook: string, min: string, max: string, hedgeBooks = fixedBook === "DraftKings" ? HEDGE_FD : HEDGE): FinderConfig => ({
+/** Quinn's hedge rule: FanDuel hedges on DraftKings, DraftKings on FanDuel, every other book on either of the two. */
+export function hedgesFor(fixedBook: string): string[] {
+  if (fixedBook === "FanDuel") return ["DraftKings"];
+  if (fixedBook === "DraftKings") return ["FanDuel"];
+  return ["FanDuel", "DraftKings"];
+}
+
+const cfg = (fixedBook: string, min: string, max: string, hedgeBooks = hedgesFor(fixedBook)): FinderConfig => ({
   fixedBook, leagues: LEAGUES, hedgeBooks: hedgeBooks.filter(b => b !== fixedBook),
   fixedMinAmerican: min, fixedMaxAmerican: max, hideLive: true, todayOnly: true, markets: ["Moneyline"],
 });
@@ -46,6 +51,12 @@ export const BUILT_IN: Preset[] = [
   { id: "b-rf-tsb1k", tool: "riskfree", name: "theScore Bet $1k risk free", config: cfg("theScore Bet", "+200", "+1000"), inputs: { amount: "1000", conv: 65 }, builtIn: true },
   { id: "b-rf-mgm", tool: "riskfree", name: "BetMGM $1.5k risk free", config: cfg("BetMGM", "+200", "+1000"), inputs: { amount: "1500", conv: 65 }, builtIn: true },
   { id: "b-rf-br500", tool: "riskfree", name: "BetRivers $500 risk free", config: cfg("BetRivers", "+200", "+1000"), inputs: { amount: "500", conv: 65 }, builtIn: true },
+
+  // Site credit (stake comes back when it wins: a deposit match or site credit bet like cash)
+  { id: "b-sc-fd500", tool: "credit", name: "FanDuel $500 deposit match", config: cfg("FanDuel", "-200", "+200"), inputs: { amount: "500" }, builtIn: true },
+  { id: "b-sc-tsb250", tool: "credit", name: "theScore Bet $250 site credit", config: cfg("theScore Bet", "-200", "+200"), inputs: { amount: "250" }, builtIn: true },
+  { id: "b-sc-br250", tool: "credit", name: "BetRivers $250 site credit", config: cfg("BetRivers", "-200", "+200"), inputs: { amount: "250" }, builtIn: true },
+  { id: "b-sc-dk", tool: "credit", name: "DraftKings site credit", config: cfg("DraftKings", "-200", "+200"), inputs: { amount: "250" }, builtIn: true },
 
   // Profit boost
   { id: "b-pb-fd25", tool: "boost", name: "FanDuel 25% boost", config: cfg("FanDuel", "-200", "+300"), inputs: { stake: "100", boost: "25", cap: "50" }, builtIn: true },
