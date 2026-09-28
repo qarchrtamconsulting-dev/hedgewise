@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   const key = process.env.ODDS_API_KEY;
   const books = bookmakers ? `&bookmakers=${bookmakers}` : "";
-  const common = `apiKey=${key}&regions=us&oddsFormat=decimal&includeLinks=true&includeSids=true${books}`;
+  const common = `apiKey=${key}&regions=us&oddsFormat=american&includeLinks=true&includeSids=true${books}`;
   const url = list
     // The events list doesn't use quota: used when only alternate lines are wanted.
     ? `https://api.the-odds-api.com/v4/sports/${sport}/events?apiKey=${key}&dateFormat=iso`
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
       ? `https://api.the-odds-api.com/v4/sports/${sport}/events/${event}/odds?${common}&markets=${markets.join(",")}`
       : `https://api.the-odds-api.com/v4/sports/${sport}/odds/?${common}&markets=${markets.join(",")}`;
 
-  const cacheKey = `${sport}|${bookmakers || ""}|${list ? "list" : markets.join(",")}|${event || ""}`;
+  const cacheKey = `am|${sport}|${bookmakers || ""}|${list ? "list" : markets.join(",")}|${event || ""}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < TTL_MS) {
     return NextResponse.json({ data: cached.data, remaining: cached.remaining, cached: true });

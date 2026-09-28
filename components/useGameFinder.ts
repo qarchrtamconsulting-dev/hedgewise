@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { BOOK_MAP, LEAGUE_SPORT, toDec, toAm, mkHold } from "@/lib/constants";
+import { BOOK_MAP, LEAGUE_SPORT, toDec, mkHold } from "@/lib/constants";
 
 export type Family = "ml" | "spread" | "total";
 
@@ -59,7 +59,9 @@ async function pool<T>(items: T[], size: number, fn: (x: T) => Promise<void>) {
   await Promise.all(Array.from({ length: Math.min(size, items.length) }, run));
 }
 
-type Price = { price: number; link?: string; alt: boolean };
+/** price = exact decimal worked out from the book's American odds; am = those American odds as the book shows them. */
+type Price = { price: number; am: number; link?: string; alt: boolean };
+const amText = (am: number) => (am > 0 ? `+${am}` : `${am}`);
 type Sel = { label: string; family: Family; name: string; point: number | null; books: Record<string, Price> };
 
 /** Every selection on a game, grouped so each one can be paired with its exact opposite. */
@@ -72,15 +74,18 @@ function selections(game: any): Map<string, Sel> {
       for (const o of m.outcomes || []) {
         const point = typeof o.point === "number" ? o.point : null;
         if (family !== "ml" && point == null) continue;
-        if (!(o.price > 1.01)) continue;   // dead or off-the-board lines (1.00) break the math
+        // The feed sends American odds (decimal odds come rounded to 2 places, which moved lines by a few points).
+        const am = Math.round(Number(o.price));
+        const dec = toDec(am);
+        if (!dec || !(dec > 1.01)) continue;   // dead or off-the-board lines break the math
         const label = family === "ml" ? o.name : family === "spread" ? `${o.name} ${pt(point!)}` : `${o.name} ${point}`;
         const k = `${family}|${label}`;
         if (!out.has(k)) out.set(k, { label, family, name: o.name, point, books: {} });
         const s = out.get(k)!;
         const prev = s.books[bm.key];
         // The main line wins over the same line listed again under alternates.
-        if (!prev || (prev.alt && !alt) || (prev.alt === alt && o.price > prev.price)) {
-          s.books[bm.key] = { price: o.price, link: o.link || bm.link, alt };
+        if (!prev || (prev.alt && !alt) || (prev.alt === alt && dec > prev.price)) {
+          s.books[bm.key] = { price: dec, am, link: o.link || bm.link, alt };
         }
       }
     }
@@ -201,7 +206,7 @@ export function useGameFinder() {
           market: market.charAt(0).toUpperCase() + market.slice(1),
           fixedTeam: s.label, hedgeTeam: opp.label,
           fixedDecimal: fixed.price, hedgeDecimal: best.side!.price,
-          fixedAmerican: toAm(fixed.price), hedgeAmerican: toAm(best.side!.price),
+          fixedAmerican: amText(fixed.am), hedgeAmerican: amText(best.side!.am),
           hedgeBookName: BOOK_MAP[best.k] || best.k,
           hedgeBookKey: best.k,
           hold: mkHold(fixed.price, best.side!.price),
