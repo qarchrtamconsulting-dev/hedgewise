@@ -11,7 +11,8 @@ import { fmt, round5 } from "@/lib/constants";
 /**
  * Site credit / deposit match: bonus money that pays out like cash (the stake comes back when it wins).
  * Credit wins:  credit × odds − hedge.   Hedge wins: hedge × (odds − 1).
- * Hedge = credit × fixed odds ÷ hedge odds, which locks about credit ÷ (1 + hold).
+ * Hedge = credit × fixed odds ÷ hedge odds, which locks credit × (1 − hold × fixed decimal odds):
+ * low hold and the favorite side (short odds on the credit) convert best.
  */
 export default function SiteCreditFinder({ initial, initialName }: { initial?: PresetState; initialName?: string }) {
   const start = initial || defaultPreset("credit");
@@ -45,7 +46,7 @@ export default function SiteCreditFinder({ initial, initialName }: { initial?: P
           <span className="label">Site credit amount</span>
           <USDInput value={amount} set={setAmount} placeholder="250.00" />
           <div className="hint">
-            Deposit match or site credit that pays out like cash when it wins. Lowest hold converts best; a $250 credit locks about $230 at a normal line.
+            Deposit match or site credit that pays out like cash when it wins. Low hold and putting the credit on the favorite convert best.
           </div>
         </div>
       }
