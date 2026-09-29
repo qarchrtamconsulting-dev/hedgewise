@@ -47,10 +47,6 @@ export default function FinderShell({
     return n <= (g.family === "ml" ? 1 : 2);
   });
   const mkts = marketsOf(config);
-  // Books, leagues and markets rarely change between searches: folded into one line until you tap Change.
-  const [more, setMore] = useState(false);
-  useEffect(() => { try { setMore(localStorage.getItem("hw-finder-more") === "1"); } catch {} }, []);
-  useEffect(() => { try { localStorage.setItem("hw-finder-more", more ? "1" : "0"); } catch {} }, [more]);
 
   // After a search, fold the settings away and show only the games.
   // Back (button, browser back, or phone swipe) brings the settings back.
@@ -65,7 +61,9 @@ export default function FinderShell({
   }, [loading]);
 
   useEffect(() => {
-    const onPop = () => { if (pushed.current) { pushed.current = false; setShowResults(false); } };
+    // Coming back from results should land at the top of the settings, not wherever the results were scrolled to.
+    try { if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual"; } catch {}
+    const onPop = () => { if (pushed.current) { pushed.current = false; setShowResults(false); requestAnimationFrame(() => window.scrollTo({ top: 0 })); } };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
@@ -77,7 +75,7 @@ export default function FinderShell({
   }
   const back = () => {
     if (pushed.current) window.history.back();   // popstate handler closes the results view
-    else setShowResults(false);
+    else { setShowResults(false); window.scrollTo({ top: 0 }); }
   };
 
   const list = (
@@ -161,15 +159,6 @@ export default function FinderShell({
           </div>
         </div>
 
-        <button className="card fs-more" onClick={() => setMore(m => !m)} aria-expanded={more}>
-          <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, textAlign: "left" }}>
-            <span className="label" style={{ margin: 0 }}>Books, leagues and markets</span>
-            <span className="fs-more-sum">{[config.fixedBook ? `${config.fixedBook} → ${config.hedgeBooks.join(", ") || "no hedge book"}` : "No fixed book", config.leagues.join(", "), mkts.join(", ")].filter(Boolean).join(" · ")}</span>
-          </span>
-          <span className="fs-more-chev">{more ? "Hide" : "Change"}</span>
-        </button>
-
-        {more && <>
         <div className="card">
           <span className="label">Fixed book</span>
           <select className="input" value={config.fixedBook} onChange={e => set({ fixedBook: e.target.value, hedgeBooks: hedgesFor(e.target.value) })}>
@@ -185,13 +174,15 @@ export default function FinderShell({
           <div className="hint" style={{ marginTop: -4 }}>Alt lines are pulled game by game: about 1 API credit per game per alt market.</div>
         )}
         <CheckList label="Hedge books" options={BOOKS.filter(b => b !== config.fixedBook)} value={config.hedgeBooks} onChange={(v) => set({ hedgeBooks: v })} req />
-        </>}
 
         <button className="btn-primary fs-find" onClick={onFetch} disabled={loading}>{loading ? "Fetching…" : "Find games"}</button>
 
       </div>
 
-      <div>
+      {games.length > 0 && (
+        <button className="btn-ghost fs-phone-results" onClick={open}>Show {games.length} result{games.length === 1 ? "" : "s"}{updated ? ` · ${updated}` : ""}</button>
+      )}
+      <div className="fs-inline-results">
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12, minHeight: 22 }}>
           <div className="section-title">{games.length > 0 ? `${games.length} game${games.length === 1 ? "" : "s"}` : "Results"}</div>
           {updated && <span style={{ color: "var(--muted)", fontSize: 12 }}>Updated {updated}</span>}
