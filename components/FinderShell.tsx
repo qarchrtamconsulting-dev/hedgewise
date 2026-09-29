@@ -47,6 +47,10 @@ export default function FinderShell({
     return n <= (g.family === "ml" ? 1 : 2);
   });
   const mkts = marketsOf(config);
+  // Books, leagues and markets rarely change between searches: folded into one line until you tap Change.
+  const [more, setMore] = useState(false);
+  useEffect(() => { try { setMore(localStorage.getItem("hw-finder-more") === "1"); } catch {} }, []);
+  useEffect(() => { try { localStorage.setItem("hw-finder-more", more ? "1" : "0"); } catch {} }, [more]);
 
   // After a search, fold the settings away and show only the games.
   // Back (button, browser back, or phone swipe) brings the settings back.
@@ -142,6 +146,30 @@ export default function FinderShell({
 
         {inputs}
 
+        <div className="card" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div>
+            <span className="label">Min odds</span>
+            <input className="input num" value={config.fixedMinAmerican} onChange={e => set({ fixedMinAmerican: e.target.value })} inputMode="numeric" />
+          </div>
+          <div>
+            <span className="label">Max odds</span>
+            <input className="input num" value={config.fixedMaxAmerican} onChange={e => set({ fixedMaxAmerican: e.target.value })} inputMode="numeric" />
+          </div>
+          <div style={{ gridColumn: "1 / -1", paddingTop: 4, display: "flex", flexDirection: "column", gap: 8 }}>
+            <Toggle on={config.todayOnly !== false} set={(v) => set({ todayOnly: v })} label="Today's games only" />
+            <Toggle on={config.hideLive} set={(v) => set({ hideLive: v })} label="Hide live games" />
+          </div>
+        </div>
+
+        <button className="card fs-more" onClick={() => setMore(m => !m)} aria-expanded={more}>
+          <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, textAlign: "left" }}>
+            <span className="label" style={{ margin: 0 }}>Books, leagues and markets</span>
+            <span className="fs-more-sum">{[config.fixedBook ? `${config.fixedBook} → ${config.hedgeBooks.join(", ") || "no hedge book"}` : "No fixed book", config.leagues.join(", "), mkts.join(", ")].filter(Boolean).join(" · ")}</span>
+          </span>
+          <span className="fs-more-chev">{more ? "Hide" : "Change"}</span>
+        </button>
+
+        {more && <>
         <div className="card">
           <span className="label">Fixed book</span>
           <select className="input" value={config.fixedBook} onChange={e => set({ fixedBook: e.target.value, hedgeBooks: hedgesFor(e.target.value) })}>
@@ -157,21 +185,9 @@ export default function FinderShell({
           <div className="hint" style={{ marginTop: -4 }}>Alt lines are pulled game by game: about 1 API credit per game per alt market.</div>
         )}
         <CheckList label="Hedge books" options={BOOKS.filter(b => b !== config.fixedBook)} value={config.hedgeBooks} onChange={(v) => set({ hedgeBooks: v })} req />
+        </>}
 
-        <div className="card" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <div>
-            <span className="label">Min odds</span>
-            <input className="input num" value={config.fixedMinAmerican} onChange={e => set({ fixedMinAmerican: e.target.value })} />
-          </div>
-          <div>
-            <span className="label">Max odds</span>
-            <input className="input num" value={config.fixedMaxAmerican} onChange={e => set({ fixedMaxAmerican: e.target.value })} />
-          </div>
-          <div style={{ gridColumn: "1 / -1", paddingTop: 4, display: "flex", flexDirection: "column", gap: 8 }}>
-            <Toggle on={config.todayOnly !== false} set={(v) => set({ todayOnly: v })} label="Today's games only" />
-            <Toggle on={config.hideLive} set={(v) => set({ hideLive: v })} label="Hide live games" />
-          </div>
-        </div>
+        <button className="btn-primary fs-find" onClick={onFetch} disabled={loading}>{loading ? "Fetching…" : "Find games"}</button>
 
       </div>
 

@@ -73,9 +73,12 @@ export default function MorningList() {
   return (
     <div className="ml">
       <div className="ml-head">
-        <div className="ml-touched">
-          <div className="ml-touched-top"><span className="task-sub">Touched today</span><b>{touchedN} of {rows.length}</b></div>
-          <div className="progress"><div style={{ width: `${rows.length ? (touchedN / rows.length) * 100 : 0}%` }} /></div>
+        <div className="ml-headrow">
+          <div className="ml-touched" style={{ flex: 1 }}>
+            <div className="ml-touched-top"><span className="task-sub">Touched today</span><b>{touchedN} of {rows.length}</b></div>
+            <div className="progress"><div style={{ width: `${rows.length ? (touchedN / rows.length) * 100 : 0}%` }} /></div>
+          </div>
+          <Link className="btn-primary" style={{ width: "auto", padding: "9px 16px" }} href="/clients/run">Start morning run ›</Link>
         </div>
         <div className="ml-tabs" role="tablist">
           <button className={`ml-tab${view === "all" ? " active" : ""}`} onClick={() => pick("all")}>Everyone <b>{rows.length}</b></button>

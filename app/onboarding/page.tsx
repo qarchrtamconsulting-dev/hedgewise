@@ -145,6 +145,20 @@ export default function OnboardingPage() {
     } catch (e: any) { setNote(`Couldn't save that: ${e?.message || "database error"}`); load(); }
   };
 
+  // The same person entered twice: identical names, or a first-name-only record next to a full name.
+  const dupes = useMemo(() => {
+    const norm = (n: string) => n.trim().toLowerCase().replace(/\s+/g, " ");
+    const cs = clients.filter(c => norm(c.name) && !/^(test|one-timers)$/i.test(c.name.trim()));
+    const out: { a: LeadClient; b: LeadClient; why: string }[] = [];
+    for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) {
+      const A = norm(cs[i].name), B = norm(cs[j].name);
+      const [fa, ...ra] = A.split(" "), [fb, ...rb] = B.split(" ");
+      if (A === B) out.push({ a: cs[i], b: cs[j], why: "Same name" });
+      else if (fa === fb && (!ra.length || !rb.length) && (!cs[i].state || !cs[j].state || cs[i].state === cs[j].state)) out.push({ a: cs[i], b: cs[j], why: "First name only on one" });
+    }
+    return out;
+  }, [clients]);
+
   if (err) return <div className="banner" style={{ color: "var(--neg)" }}>{err}</div>;
   if (!loaded) return <div style={{ color: "var(--muted)", padding: 24 }}>Loading…</div>;
 
@@ -162,6 +176,20 @@ export default function OnboardingPage() {
       </div>
 
       {adding && <AddLead onDone={() => { setAdding(false); load(); }} />}
+      {dupes.length > 0 && (
+        <section className="card" style={{ borderColor: "color-mix(in srgb, var(--neg) 45%, var(--border))", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="section-title">Possible duplicates · {dupes.length}</div>
+          <div className="task-sub">Open both and move anything onto the real one, then archive the extra. Nothing here changes on its own.</div>
+          {dupes.map(d => (
+            <div key={`${d.a.id}${d.b.id}`} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline", fontSize: 14 }}>
+              <Link href={`/clients/${d.a.id}`}>{d.a.name}</Link><span className="task-sub">({d.a.status || "—"})</span>
+              <span className="task-sub">and</span>
+              <Link href={`/clients/${d.b.id}`}>{d.b.name}</Link><span className="task-sub">({d.b.status || "—"})</span>
+              <span className="task-sub">· {d.why}</span>
+            </div>
+          ))}
+        </section>
+      )}
       {note && <div className="banner" style={{ color: "var(--neg)" }}>{note}</div>}
 
       <div className="onb-grid">

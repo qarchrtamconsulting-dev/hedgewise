@@ -7,6 +7,8 @@ import SiteCreditFinder from "@/components/SiteCreditFinder";
 import ProfitBoostFinder from "@/components/ProfitBoostFinder";
 import { PresetState, ToolKey, defaultPreset, hedgesFor, readShareParams } from "@/lib/presets";
 import { ODDS_BOOKS } from "@/lib/constants";
+import Link from "next/link";
+import { getDb } from "@/lib/db";
 
 
 /** A tool's standard setup, with the fixed book swapped for the one picked on the Board. */
@@ -28,6 +30,19 @@ export default function ToolsPage() {
   const [shared, setShared] = useState<{ tool: ToolKey; state: PresetState; name?: string } | null>(null);
   const [linkKey, setLinkKey] = useState(0);
   const [book, setBook] = useState<string | null>(null);
+  const [forClient, setForClient] = useState<{ id: string; name: string } | null>(null);
+
+  // Came here for a client (/tools?client=ID): say who, so Send and Log start with them picked.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("client");
+    if (!id) return;
+    (async () => {
+      try {
+        const { data } = await (await getDb()).from("clients").select("id,name").eq("id", id).maybeSingle();
+        if (data) setForClient(data as { id: string; name: string });
+      } catch {}
+    })();
+  }, []);
 
   // Open a shared link: /tools?tool=freebet&s=<preset>
   useEffect(() => {
@@ -53,6 +68,15 @@ export default function ToolsPage() {
 
   return (
     <div>
+      {forClient && (
+        <div className="card for-bar">
+          <span style={{ fontSize: 14 }}><span className="task-sub">For </span><b>{forClient.name}</b><span className="task-sub"> · Send and Log start with them picked</span></span>
+          <span style={{ display: "flex", gap: 12, fontSize: 13 }}>
+            <Link href={`/clients/${forClient.id}`}>Their page</Link>
+            <a href="/tools" onClick={() => setForClient(null)}>Clear</a>
+          </span>
+        </div>
+      )}
       <div className="tab-bar" style={{ marginBottom: 20 }}>
         {TOOLS.map(([k, l]) => (
           <button key={k} className={`tab${tool === k ? " active" : ""}`} onClick={() => pick(k)}>{l}</button>

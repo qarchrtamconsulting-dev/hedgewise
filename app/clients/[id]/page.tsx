@@ -10,7 +10,8 @@ import Onboarding from "@/components/Onboarding";
 import Receipt from "@/components/Receipt";
 import ClientOverview from "@/components/Journey";
 import { dayOn } from "@/lib/cadence";
-import { settlePlay, syncSelfHedgeReturns, waitingOnSecondLeg } from "@/lib/settle";
+import { settlePlay, waitingOnSecondLeg } from "@/lib/settle";
+import { canDelete, deletePlay, setPlayStatus } from "@/lib/playActions";
 
 const ALL_BOOKS = [...BOOKS, "ESPN Bet"];
 
@@ -296,23 +297,16 @@ function PlayDetail({ play, legs, client, reload }: { play: Play; legs: Leg[]; c
   };
 
   const setStatus = async (status: "open" | "void") => {
-    setBusy(true);
-    const db = await getDb();
-    if (status === "open") await db.from("legs").update({ result: "pending" }).eq("play_id", play.id);
-    await db.from("plays").update({ status, settled_on: null }).eq("id", play.id);
-    try { await db.from("plays").update({ withdrawal: null, withdrawal_amount: null }).eq("id", play.id); } catch {}
-    // Reopen: undo any self-hedge payout; void: refund the self-hedge stake.
-    const voided: Record<string, Leg["result"]> = {};
-    legs.forEach(l => { voided[l.id] = "void"; });
-    await syncSelfHedgeReturns(db, play, legs, status === "void" ? voided : null);
+    setBusy(true); setErr(null);
+    try { await setPlayStatus(await getDb(), play, legs, status); }
+    catch (e: any) { setErr(e?.message || "Could not update."); }
     setBusy(false); reload();
   };
 
   const remove = async () => {
-    const db = await getDb();
-    await db.from("capital_movements").delete().eq("play_id", play.id);   // drop its loan entries too
-    await db.from("plays").delete().eq("id", play.id);
-    reload();
+    setErr(null);
+    try { await deletePlay(await getDb(), play); reload(); }
+    catch (e: any) { setErr(e?.message || "Could not delete."); }
   };
 
   // Withdrawal text: winning legs that sit in the client's own accounts.
@@ -388,9 +382,9 @@ function PlayDetail({ play, legs, client, reload }: { play: Play; legs: Leg[]; c
         )}
         {play.status !== "open" && <button className="btn-ghost" onClick={() => setStatus("open")} disabled={busy}>Reopen</button>}
         {play.status !== "void" && <button className="btn-ghost" onClick={() => setStatus("void")} disabled={busy}>Void</button>}
-        {confirmDelete
-          ? <button className="btn-ghost btn-danger" onClick={remove}>Confirm delete</button>
-          : <button className="btn-ghost" onClick={() => setConfirmDelete(true)}>Delete</button>}
+        {canDelete(play) && (confirmDelete
+          ? <button className="btn-ghost btn-danger" onClick={remove}>Yes, it was never placed · delete</button>
+          : <button className="btn-ghost" onClick={() => setConfirmDelete(true)} title="Only for a bet that never went in. Void keeps it in history.">Never placed · delete</button>)}
         {err && <span style={{ color: "var(--neg)", fontSize: 12 }}>{err}</span>}
       </div>
       {play.status === "settled" && winning.length === 0 && legs.length > 0 && (

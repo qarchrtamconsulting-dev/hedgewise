@@ -9,6 +9,7 @@ import { GAMES_EVENT, GRADED_EVENT, autoGrade, lastGames, lastScheduledCheck } f
 import type { GameStatus } from "@/lib/autograde";
 import { needingResult } from "@/lib/grade-run";
 import Receipt from "@/components/Receipt";
+import { canDelete, deletePlay, setPlayStatus } from "@/lib/playActions";
 import ClientBoard from "@/components/ClientBoard";
 import type { BoardGroup, BoardRow } from "@/components/ClientBoard";
 import {
@@ -458,6 +459,7 @@ export default function TodayPage() {
               </div>
               <div className="task-side">
                 {u ? <><div className="num" style={{ fontWeight: 600 }}>{u.text}</div>{u.rel && <div className={u.rel.startsWith("In progress") ? "game-soon" : "task-sub"}>{u.rel}</div>}</> : <div className="task-sub">No game time</div>}
+                <BetMenu play={p} onDone={load} />
               </div>
             </div>
           );
@@ -474,6 +476,31 @@ export default function TodayPage() {
         </div>
         {stageView === "board" ? <ClientBoard groups={boardGroups} /> : <Lanes board={board} t={t} />}
       </section>
+    </div>
+  );
+}
+
+/** ⋯ on an open bet: void keeps it in history; delete is only for a bet that was never placed. */
+function BetMenu({ play, onDone }: { play: PlayRow; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const run = async (f: () => Promise<void>) => {
+    setBusy(true); setErr(null);
+    try { await f(); setOpen(false); onDone(); } catch (e: any) { setErr(e?.message || "Couldn't save that."); }
+    setBusy(false);
+  };
+  if (!open) return <button className="mini bet-menu-btn" aria-label="Bet options" onClick={() => setOpen(true)}>⋯</button>;
+  return (
+    <div className="bet-menu">
+      <Link className="mini" href={`/clients/${play.client_id}`}>Edit on client</Link>
+      <button className="mini" disabled={busy} onClick={() => run(async () => setPlayStatus(await getDb(), play, play.legs, "void"))}>Void</button>
+      {canDelete(play) && (confirm
+        ? <button className="mini btn-danger" disabled={busy} onClick={() => run(async () => deletePlay(await getDb(), play))}>Yes, delete</button>
+        : <button className="mini" onClick={() => setConfirm(true)}>Never placed · delete</button>)}
+      <button className="mini" onClick={() => { setOpen(false); setConfirm(false); }}>Close</button>
+      {err && <span style={{ color: "var(--neg)", fontSize: 12 }}>{err}</span>}
     </div>
   );
 }
