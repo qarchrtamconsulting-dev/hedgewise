@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Client, ClientSummary, fanDuelDay, fetchAll, getDb, money, money0, pct, shortDate, tone } from "@/lib/db";
 import { Stage, nextOffer } from "@/lib/playbook";
+import MorningList from "@/components/MorningList";
 
 type Row = Client & ClientSummary & { balance: number; outstanding: number; next_app: string | null };
 type SortKey = "next_app" | "status" | "outstanding" | "name" | "state" | "split" | "open_plays" | "settled_plays" | "profit" | "your_share" | "received" | "balance" | "loan_outstanding" | "last_play" | "started_on";
@@ -26,6 +27,33 @@ const COLS: { key: SortKey; label: string; right?: boolean }[] = [
 ];
 
 export default function ClientsPage() {
+  const [mode, setMode] = useState<"list" | "table">("list");
+  useEffect(() => { try { const v = localStorage.getItem("hw-clients-mode"); if (v === "list" || v === "table") setMode(v); } catch {} }, []);
+  const pickMode = (m: "list" | "table") => { setMode(m); try { localStorage.setItem("hw-clients-mode", m); } catch {} };
+  const toggle = (
+    <div className="tab-bar">
+      <button className={`tab${mode === "list" ? " active" : ""}`} onClick={() => pickMode("list")}>Morning list</button>
+      <button className={`tab${mode === "table" ? " active" : ""}`} onClick={() => pickMode("table")}>Table</button>
+    </div>
+  );
+  if (mode === "list") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h1 className="page-title">Clients</h1>
+            <p className="page-sub">Everyone live, oldest start first</p>
+          </div>
+          {toggle}
+        </div>
+        <MorningList />
+      </div>
+    );
+  }
+  return <ClientTable toggle={toggle} />;
+}
+
+function ClientTable({ toggle }: { toggle: React.ReactNode }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -116,6 +144,7 @@ export default function ClientsPage() {
           <p className="page-sub">{view.length} of {rows.length} clients</p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {toggle}
           <input className="input" placeholder="Search name or state" value={q} onChange={e => setQ(e.target.value)} style={{ width: 220 }} />
           <div className="tab-bar">
             {([["active", "Active"], ["onboarding", "Onboarding"], ["open", "Open plays"], ["loan", "Owes you"], ["all", "All"]] as const).map(([k, l]) => (

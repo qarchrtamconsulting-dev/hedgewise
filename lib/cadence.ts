@@ -7,7 +7,7 @@
 //  Days 4–7    a FanDuel promo most days (deposit match or bet match)
 //  Week 1      theScore gets started; its $250 deposit match posts 3 days after the first theScore bet
 //  Days 8–30   a $500 FanDuel promo every Tuesday, Thursday and Sunday (deposit match, risk-free bet
-//              or bet match). The check-in text and $0 FanDuel cash happen the day before:
+//              or bet match). A heads-up / screenshot check-in goes out the day before:
 //              Monday for Tuesday, Wednesday for Thursday, Friday for Sunday.
 //  Day 31+     wrap-up
 //  No play in 10+ days: gone quiet
@@ -32,11 +32,17 @@ export const dayLabel = (iso: string) => {
 
 /** $500 FanDuel promos drop on these weekdays. */
 const PROMO_WEEKDAYS = new Set([2, 4, 0]);                // Tue, Thu, Sun
-/** Check-in / zero-out weekday → how many days until the promo it sets up. */
+/** Check-in weekday → how many days until the promo it's for. */
 const CHECK_IN_AHEAD: Record<number, number> = { 1: 1, 3: 1, 5: 2 };   // Mon→Tue, Wed→Thu, Fri→Sun
-export const isZeroOutDay = (iso: string) => CHECK_IN_AHEAD[weekday(iso)] != null;
-/** The promo day a zero-out day sets up (Mon → Tue, Wed → Thu, Fri → Sun); null on other days. */
+export const isCheckInDay = (iso: string) => CHECK_IN_AHEAD[weekday(iso)] != null;
+/** The promo day a check-in day is for (Mon → Tue, Wed → Thu, Fri → Sun); null on other days. */
 export const promoAfter = (iso: string) => { const a = CHECK_IN_AHEAD[weekday(iso)]; return a == null ? null : addDays(iso, a); };
+
+/** Is this date one of the client's $500 FanDuel promo days (a Tue/Thu/Sun on days 8–30)? */
+export const isPromoDate = (startedOn: string, date: string) => {
+  const n = dayOn(startedOn, date);
+  return PROMO_WEEKDAYS.has(weekday(date)) && n >= PROMO_FIRST_DAY && n <= PROMO_LAST_DAY;
+};
 
 // ── Inputs ──
 export interface CadencePlay {
@@ -180,7 +186,7 @@ export interface Task {
 
 export const KIND_LABEL: Record<TaskKind, string> = {
   fd_promo: "$500 FanDuel promo",
-  fd_check_in: "Check-in · FanDuel $0 by midnight",
+  fd_check_in: "Heads-up · $500 promo next",
   fd_reward_stack: "FanDuel reward stack",
   tsb_match: "theScore $250 deposit match",
   fd_week1_promo: "FanDuel promo (week 1)",
@@ -229,8 +235,8 @@ export function tasksOn(c: ClientCadence, plays: CadencePlay[], date: string): T
   if (ahead != null) {
     const promoDay = n + ahead;
     if (promoDay >= PROMO_FIRST_DAY && promoDay <= PROMO_LAST_DAY) {
-      add({ kind: "fd_check_in", title: `Check-in for ${weekdayName(addDays(date, ahead))}'s $500 promo`,
-        detail: "Screenshots, then FanDuel cash to $0 by midnight", send: "checkin", done: false });
+      add({ kind: "fd_check_in", title: `Heads-up for ${weekdayName(addDays(date, ahead))}'s $500 promo`,
+        detail: "Should get one · ask for screenshots", send: "checkin", done: false });
     }
   }
   if (PROMO_WEEKDAYS.has(wd) && n >= PROMO_FIRST_DAY && n <= PROMO_LAST_DAY) {

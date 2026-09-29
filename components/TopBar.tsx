@@ -9,11 +9,12 @@ import { loadOps } from "@/lib/ops";
 
 const PRIMARY = [
   { href: "/", label: "Board", count: "due" as const },
+  { href: "/clients", label: "Clients" },
   { href: "/tools", label: "Find" },
   { href: "/money", label: "Money", count: "collect" as const },
 ];
 const MORE = [
-  { href: "/clients", label: "Clients" },
+  { href: "/promos", label: "Promos" },
   { href: "/today", label: "Today checklist" },
   { href: "/onboarding", label: "Onboarding", count: "leads" as const },
   { href: "/playbook", label: "Playbook" },

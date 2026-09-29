@@ -41,6 +41,30 @@ function track(cad: ClientCadence, plays: CadencePlay[]) {
 }
 interface Cell { d: number; n: number; book: string | null; open: boolean; today: boolean; future: boolean; promo: boolean; label: string }
 
+/** The 30-day track: one cell per day, a book letter on days with a play, a dot under $500 days. */
+export function Track({ cad, plays, name }: { cad: ClientCadence; plays: CadencePlay[]; name: string }) {
+  const { cells, after } = track(cad, plays);
+  return (
+    <div className="bd-track" aria-label={`${name}: 30-day track`}>
+      {cells.length === 0 && <span className="task-sub" style={{ gridColumn: "1 / -1" }}>No FanDuel bet yet</span>}
+      {cells.map(c => {
+        const st = bookStyle(c.book);
+        return (
+          <span key={c.d} className={`bd-cell${c.future ? " future" : ""}${c.today ? " today" : ""}${c.promo ? " promo" : ""}`}
+            title={`Day ${c.d}${c.promo ? " · $500 promo day" : ""}${c.n ? ` · ${c.label}${c.open ? " (open)" : ""}` : ""}`}>
+            {c.n > 0 && (
+              <i className={`bd-play${c.open ? " open" : ""}`} style={{ borderColor: st.color, background: c.open ? "transparent" : st.color }}>
+                {st.k}
+              </i>
+            )}
+          </span>
+        );
+      })}
+      {cells.length > 0 && <span className="bd-after">{after ? `+${after}` : ""}</span>}
+    </div>
+  );
+}
+
 export default function ClientBoard({ groups }: { groups: BoardGroup[] }) {
   return (
     <div className="board">
@@ -62,30 +86,13 @@ export default function ClientBoard({ groups }: { groups: BoardGroup[] }) {
           </div>
           <div className="bd-list">
             {g.rows.map(r => {
-              const { cells, after } = track(r.cad, r.plays);
               return (
                 <div key={r.id} className="bd-row">
                   <div className="bd-name">
                     <Link href={`/clients/${r.id}`}>{r.name}</Link>
                     <span className="task-sub">{r.sub}</span>
                   </div>
-                  <div className="bd-track" aria-label={`${r.name}: 30-day track`}>
-                    {cells.length === 0 && <span className="task-sub" style={{ gridColumn: "1 / -1" }}>No FanDuel bet yet</span>}
-                    {cells.map(c => {
-                      const st = bookStyle(c.book);
-                      return (
-                        <span key={c.d} className={`bd-cell${c.future ? " future" : ""}${c.today ? " today" : ""}${c.promo ? " promo" : ""}`}
-                          title={`Day ${c.d}${c.promo ? " · $500 promo day" : ""}${c.n ? ` · ${c.label}${c.open ? " (open)" : ""}` : ""}`}>
-                          {c.n > 0 && (
-                            <i className={`bd-play${c.open ? " open" : ""}`} style={{ borderColor: st.color, background: c.open ? "transparent" : st.color }}>
-                              {st.k}
-                            </i>
-                          )}
-                        </span>
-                      );
-                    })}
-                    {cells.length > 0 && <span className="bd-after">{after ? `+${after}` : ""}</span>}
-                  </div>
+                  <Track cad={r.cad} plays={r.plays} name={r.name} />
                   <span className="bd-owes">{r.owes > 0.5 ? money0(r.owes) : "—"}</span>
                   <div className={`bd-next${r.hot ? " hot" : ""}${r.warn ? " warn" : ""}`}>
                     <b>{r.next}</b>

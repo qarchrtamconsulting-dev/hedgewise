@@ -12,7 +12,7 @@ import Receipt from "@/components/Receipt";
 import ClientBoard from "@/components/ClientBoard";
 import type { BoardGroup, BoardRow } from "@/components/ClientBoard";
 import {
-  KIND_LABEL, KIND_ORDER, addDays, appsFor, cadenceFor, dayLabel, isZeroOutDay, promoAfter, screenshotText,
+  KIND_LABEL, KIND_ORDER, addDays, appsFor, cadenceFor, dayLabel, isCheckInDay, promoAfter, screenshotText,
   tasksForToday, tasksOn, toCadencePlay, weekOneStep, weekdayName,
 } from "@/lib/cadence";
 import type { CadencePlay, ClientCadence, Lane, PlayLike, SendKind, Task, TaskKind } from "@/lib/cadence";
@@ -230,7 +230,6 @@ export default function TodayPage() {
   // Today A board: one row per client with a 30-day track, grouped by stage, promo days first.
   const boardGroups = useMemo<BoardGroup[]>(() => {
     const todoBy = new Map(rows.map(its => [its[0].e.c.id, its]));
-    const zeroBy = new Map(zero.map(i => [i.e.c.id, i]));
     const openBy = new Map<string, PlayRow[]>();
     open.forEach(p => { const a = openBy.get(p.client_id) || []; a.push(p); openBy.set(p.client_id, a); });
     const betLine = (id: string) => {
@@ -242,7 +241,6 @@ export default function TodayPage() {
     };
     const toRow = (e: Entry): BoardRow => {
       const its = todoBy.get(e.c.id) || [];
-      const z = zeroBy.get(e.c.id);
       const name = first(e.c.name);
       const sub = [e.c.state, e.cad.day != null ? (e.cad.day < 1 ? `starts ${wd3(e.cad.startedOn!)}` : `day ${e.cad.day}`) : "not started"].filter(Boolean).join(" · ");
       const base = { id: e.c.id, name: e.c.name, sub, cad: e.cad, plays: e.plays, owes: e.owes };
@@ -257,10 +255,6 @@ export default function TodayPage() {
           action: texts.length
             ? <a className="btn-primary bd-btn" href={smsHref(e.c.phone, text)} title={text} onClick={() => onMark(texts, "texted", true)}>Text {name}</a>
             : <Link className="btn-ghost bd-btn" href={`/tools?client=${e.c.id}`}>Find a game</Link> };
-      }
-      if (z && z.state === "texted") {
-        return { ...base, next: "FanDuel cash to $0 by midnight", nextSub: "Checked in · confirm when it's $0", hot: true,
-          action: <button className="btn-primary bd-btn" onClick={() => onMark([z], "done")}>At $0</button> };
       }
       switch (e.cad.lane) {
         case "promo":
@@ -278,7 +272,7 @@ export default function TodayPage() {
       }
     };
     const G: { lane: Lane; title: string; range: string; rule: string }[] = [
-      { lane: "promo", title: "FanDuel promo days", range: "days 8–30", rule: "$0 FanDuel cash before midnight Mon, Wed, Fri → $500 promo the next day" },
+      { lane: "promo", title: "FanDuel promo days", range: "days 8–30", rule: "$500 FanDuel promo Tue, Thu, Sun · heads-up and screenshots the day before" },
       { lane: "week1", title: "Week 1", range: "days 1–7", rule: "Min loss, reward stack, $25 bet match, FanDuel promos · start theScore" },
       { lane: "quiet", title: "Gone quiet", range: "no play in 10+ days", rule: "Stopping before day 21 earns about $580 vs $3,300" },
       { lane: "wrap", title: "Wrap-up", range: "day 31+", rule: "Withdraw, collect, ask for referrals" },
@@ -321,8 +315,9 @@ export default function TodayPage() {
 
   const wd = withdrawals || [];
   const dateStr = new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
-  const zeroDone = zero.filter(i => i.state === "done").length;
-  const zeroOut = isZeroOutDay(t) && zero.length > 0;
+  const zeroDone = zero.filter(i => i.state === "done" || i.state === "texted").length;
+  const zeroOut = isCheckInDay(t) && zero.length > 0;
+  const promoNext = promoAfter(t);
   const promoToday = items.filter(i => i.t.kind === "fd_promo" && i.t.lateDays === 0).length;
   const nextPromo = coming.find(x => x.groups.some(g => g.kind === "fd_promo"));
   const noPhone = rows.filter(its => its.some(i => i.t.send) && !its[0].e.c.phone).length;
@@ -340,7 +335,7 @@ export default function TodayPage() {
       <div className="kpis">
         <Count label="To do" n={rows.length} href="#todo" />
         {zeroOut
-          ? <Count label="At $0 tonight" n={`${zeroDone} of ${zero.length}`} href="#zero" hot={zeroDone < zero.length} />
+          ? <Count label={`Heads-up for ${promoNext ? wd3(promoNext) : "next"}'s $500`} n={`${zeroDone} of ${zero.length}`} href="#zero" hot={zeroDone < zero.length} />
           : promoToday > 0
             ? <Count label="$500 promos today" n={promoToday} href="#todo" />
             : <Count label={nextPromo ? `$500 promos ${wd3(nextPromo.d)}` : "$500 promos"} n={nextPromo ? nextPromo.groups.find(g => g.kind === "fd_promo")!.list.length : 0} href="#coming" />}
@@ -430,7 +425,7 @@ export default function TodayPage() {
             <div key={d} className="card coming-day">
               <div className="coming-head">
                 <span className="section-title">{dayLabel(d)}</span>
-                {isZeroOutDay(d) && groups.some(g => g.kind === "fd_check_in") && <span className="status sent">$0 by midnight</span>}
+                {isCheckInDay(d) && groups.some(g => g.kind === "fd_check_in") && <span className="status sent">Heads-up day</span>}
               </div>
               {groups.length === 0 && <div className="task-sub">Nothing scheduled.</div>}
               {groups.map(g => (
@@ -559,33 +554,32 @@ function CheckRow({ its, onMark }: { its: Item[]; onMark: OnMark }) {
 
 function ZeroOut({ zero, done, t, onMark }: { zero: Item[]; done: number; t: string; onMark: OnMark }) {
   const promoOn = promoAfter(t);
+  const day = promoOn ? weekdayName(promoOn) : "the next";
   return (
-    <Section id="zero" title="FanDuel cash to $0 by midnight" count={zero.length} empty=""
-      sub={`Withdrawal settled and $0 cash tonight sets up ${promoOn ? `${weekdayName(promoOn)}'s` : "the next"} $500 promo.`}>
+    <Section id="zero" title={`${day}'s $500 promos · heads-up`} count={zero.length} empty=""
+      sub={`Everyone who should see a $500 FanDuel promo ${day === "the next" ? "next" : day}. Text a heads-up and ask for screenshots; texting checks them off.`}
+      action={<Link className="btn-ghost" href="/promos">Promo schedule</Link>}>
       <div className="card zero">
         <div className="zero-head">
-          <span className="num" style={{ fontWeight: 600 }}>{done} of {zero.length} at $0</span>
+          <span className="num" style={{ fontWeight: 600 }}>{done} of {zero.length} texted</span>
         </div>
         <div className="progress"><div style={{ width: `${zero.length ? (done / zero.length) * 100 : 0}%` }} /></div>
         <div className="zero-list">
           {zero.map(i => {
-            const label = i.state === "done" ? `At $0${i.mark?.created_at ? ` · ${clock(i.mark.created_at)}` : ""}`
-              : i.state === "texted" ? `Texted${i.mark?.created_at ? ` ${clock(i.mark.created_at)}` : ""}`
-              : i.state === "skipped" ? "Skipped" : "Not texted";
+            const on = i.state === "done" || i.state === "texted";
+            const label = on ? `Texted${i.mark?.created_at ? ` ${clock(i.mark.created_at)}` : ""}` : i.state === "skipped" ? "Skipped" : "Not texted";
+            const text = screenshotText(appsFor(["checkin"]), first(i.e.c.name));
             return (
               <div key={i.key} className="zero-row">
                 <div className="zero-name">
                   <Link href={`/clients/${i.e.c.id}`}>{i.e.c.name}</Link>
-                  <span className="task-sub">day {i.t.day}</span>
+                  <span className="task-sub">day {i.t.day + (promoOn ? Math.round((Date.parse(promoOn) - Date.parse(t)) / 86400000) : 1)} {promoOn ? wd3(promoOn) : ""}</span>
                 </div>
-                <span className={`status ${i.state === "done" ? "settled" : i.state === "texted" ? "sent" : ""}`}>{label}</span>
+                <span className={`status ${on ? "sent" : ""}`}>{label}</span>
                 <div className="zero-act">
-                  {i.state === "done"
-                    ? <button className="mini" onClick={() => onMark([i], "texted")}>Undo</button>
-                    : <>
-                        <button className="pick" onClick={() => onMark([i], "done")}>At $0</button>
-                        {i.state !== "todo" && <button className="mini" onClick={() => onMark([i], null)}>Undo</button>}
-                      </>}
+                  {on || i.state === "skipped"
+                    ? <button className="mini" onClick={() => onMark([i], null)}>Undo</button>
+                    : <a className="pick" href={smsHref(i.e.c.phone, text)} title={text} onClick={() => onMark([i], "texted", true)}>Text</a>}
                 </div>
               </div>
             );

@@ -19,7 +19,7 @@ const STAGES: { name: string; days: string; steps: string[]; lives: { label: str
       "Days 4–7: FanDuel promos", "theScore; its $250 match lands 3 days after the first bet"],
     lives: [{ label: "Today", href: "/" }, { label: "Tools", href: "/tools" }], leaks: [1, 3] },
   { name: "FanDuel promo days", days: "Days 8–30", count: "promo",
-    steps: ["$500 promo every Tue, Thu, Sun: deposit match, risk-free bet or bet match", "Check-in text and $0 FanDuel cash by midnight Mon, Wed, Fri",
+    steps: ["$500 promo every Tue, Thu, Sun: deposit match, risk-free bet or bet match", "Heads-up text and screenshots the day before: Mon, Wed, Fri",
       "New apps when the cadence allows"],
     lives: [{ label: "Today", href: "/" }], leaks: [1, 2] },
   { name: "Results", days: "Every play", count: "results",
